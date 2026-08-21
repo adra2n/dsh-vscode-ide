@@ -17,6 +17,16 @@ const ctxChip = document.getElementById('ctx-chip')
 const ctxText = document.getElementById('ctx-text')
 const ctxBar = document.getElementById('ctx-bar')
 const inCtx = document.getElementById('in-ctx')
+const settingsBtn = document.getElementById('settings')
+const settingsOverlay = document.getElementById('settings-overlay')
+const settingsClose = document.getElementById('settings-close')
+const settingsSave = document.getElementById('settings-save')
+const cfgGateway = document.getElementById('cfg-gateway')
+const cfgToolList = document.getElementById('cfg-tools-list')
+const cfgToolsEmpty = document.getElementById('cfg-tools-empty')
+const attachBtn = document.getElementById('attach')
+const attachMenu = document.getElementById('attach-menu')
+const ctxRow = document.getElementById('ctx-row')
 
 let modelsData = null
 // 根据当前选中模型同步“思考强度”下拉（无 reasoning 能力的模型隐藏）
@@ -295,7 +305,8 @@ function renderHistoryEvent(ev) {
     const inserted = ev.data?.inserted || []
     for (const msg of inserted) {
       if (msg.role === 'user') {
-        const text = (msg.content || []).filter(c => c.type === 'text').map(c => c.text).join('')
+        const raw = (msg.content || []).filter(c => c.type === 'text').map(c => c.text).join('')
+        const text = userVisibleText(raw)
         if (text) bubble(text, 'user')
       }
     }
@@ -375,6 +386,12 @@ function extractText(val) {
   return ''
 }
 
+// 组装后的用户消息包裹在 <user-message> 中；展示与去重只取内层文本，隐藏注入的上下文
+function userVisibleText(text) {
+  const m = /<user-message>\s*([\s\S]*?)\s*<\/user-message>/.exec(text || '')
+  return m ? m[1] : (text || '')
+}
+
 function renderAssistantMessage(msg) {
   if (!msg?.content) return
   for (const c of msg.content) {
@@ -396,10 +413,11 @@ function handleInboxSpliced(ev) {
   for (let i = 0; i < inserted.length; i++) {
     const item = inserted[i]
     const idx = start + i
-    const text = extractText(item.content) || extractText(item.text) || extractText(item.message)
+    let text = extractText(item.content) || extractText(item.text) || extractText(item.message)
     const kind = (item.source && item.source.kind) || item.role || ''
     const isUser = kind === 'user'
     const isReasoning = kind === 'reasoning' || kind === 'thinking'
+    if (isUser) text = userVisibleText(text)
     if (!text) continue
     if (isUser && optimisticUserEl && text === optimisticUserText) {
       optimisticUserEl = null
@@ -723,6 +741,35 @@ window.addEventListener('message', (e) => {
   } else if (m.kind === 'error') {
     hidePending()
     appendLine('⚠ ' + m.message, 'tool')
+  } else if (m.kind === 'settings') {
+    if (cfgGateway) cfgGateway.value = m.gatewayBase || ''
+    if (cfgToolList) {
+      cfgToolList.innerHTML = ''
+      const allTools = new Set([...(m.knownTools || []), ...(m.autoAllowTools || [])])
+      const allowed = new Set(m.autoAllowTools || [])
+      for (const tool of allTools) {
+        const label = document.createElement('label')
+        label.className = 'tool-toggle'
+        const cb = document.createElement('input')
+        cb.type = 'checkbox'
+        cb.checked = allowed.has(tool)
+        cb.dataset.tool = tool
+        label.appendChild(cb)
+        label.appendChild(document.createTextNode(tool))
+        cfgToolList.appendChild(label)
+      }
+      if (cfgToolsEmpty) cfgToolsEmpty.style.display = allTools.size === 0 ? '' : 'none'
+    }
+  } else if (m.kind === 'settingsSaved') {
+    closeSettings()
+  } else if (m.kind === 'contextAttached') {
+    if (!attachedContexts.some(c => c.type === m.type)) {
+      attachedContexts.push({ type: m.type, label: m.label })
+      renderCtxChips()
+    }
+  } else if (m.kind === 'contextSkipped') {
+    const rs = (m.reasons || []).map(r => r.type + ': ' + r.reason).join('；')
+    if (rs) appendLine('⚠ 部分上下文未附加 — ' + rs, 'tool')
   }
 })
 
@@ -735,13 +782,48 @@ if (effortSel) effortSel.onchange = () => sendSelectModel()
 let optimisticUserEl = null
 let optimisticUserText = ''
 
+let attachedContexts = []
+function renderCtxChips() {
+  if (!ctxRow) return
+  ctxRow.innerHTML = ''
+  for (const c of attachedContexts) {
+    const el = document.createElement('span')
+    el.className = 'ctx-chip-item'
+    const lbl = document.createElement('span')
+    lbl.className = 'lbl'
+    lbl.textContent = c.label
+    lbl.title = c.label
+    const rm = document.createElement('span')
+    rm.className = 'rm'
+    rm.textContent = '×'
+    rm.onclick = () => { attachedContexts = attachedContexts.filter(x => x.type !== c.type); renderCtxChips() }
+    el.appendChild(lbl)
+    el.appendChild(rm)
+    ctxRow.appendChild(el)
+  }
+}
+function toggleAttachMenu(show) {
+  if (attachMenu) attachMenu.hidden = !(show ?? attachMenu.hidden)
+}
+if (attachBtn) attachBtn.onclick = () => toggleAttachMenu()
+if (attachMenu) attachMenu.querySelectorAll('.mi').forEach(mi => {
+  mi.onclick = () => {
+    toggleAttachMenu(false)
+    vscode.postMessage({ kind: 'attachContext', type: mi.dataset.t })
+  }
+})
+document.addEventListener('click', (e) => {
+  if (attachMenu && !attachMenu.hidden && !e.target.closest('#attach-wrap')) toggleAttachMenu(false)
+})
+
 function send() {
   const text = ta.value.trim()
   if (!text) return
   userSentMessage = true
-  vscode.postMessage({ kind: 'prompt', text })
+  vscode.postMessage({ kind: 'prompt', text, contexts: attachedContexts.map(c => c.type) })
   ta.value = ''
-  // optimistic: show user message immediately
+  attachedContexts = []
+  renderCtxChips()
   optimisticUserText = text
   optimisticUserEl = bubble(text, 'user')
   showPending()
@@ -773,6 +855,33 @@ ta.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
   else if (e.key === 'Enter' && e.shiftKey) { /* newline */ }
 })
+
+function openSettings() {
+  vscode.postMessage({ kind: 'getSettings' })
+  if (settingsOverlay) settingsOverlay.hidden = false
+}
+function closeSettings() {
+  if (settingsOverlay) settingsOverlay.hidden = true
+}
+if (settingsBtn) settingsBtn.onclick = openSettings
+if (settingsClose) settingsClose.onclick = closeSettings
+if (settingsOverlay) settingsOverlay.onclick = (e) => { if (e.target === settingsOverlay) closeSettings() }
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && settingsOverlay && !settingsOverlay.hidden) closeSettings()
+})
+if (settingsSave) settingsSave.onclick = () => {
+  const tools = []
+  if (cfgToolList) {
+    cfgToolList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      if (cb.checked) tools.push(cb.dataset.tool)
+    })
+  }
+  vscode.postMessage({
+    kind: 'saveSettings',
+    gatewayBase: cfgGateway ? cfgGateway.value.trim() : undefined,
+    autoAllowTools: tools,
+  })
+}
 
 // 优先携带上次的 sessionId，由扩展侧验证后复用，避免每次重建 webview 都新建会话
 const savedState = vscode.getState() || {}
