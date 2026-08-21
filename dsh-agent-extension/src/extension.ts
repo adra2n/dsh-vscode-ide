@@ -224,17 +224,7 @@ class DshViewProvider implements vscode.WebviewViewProvider {
     if (fs.existsSync(bundledBin)) {
       return { cmd: process.execPath, args: [bundledBin, 'web'], env: { ELECTRON_RUN_AS_NODE: '1' } }
     }
-    try {
-      const p = execFileSync('which', ['dsh'], { encoding: 'utf8', timeout: 3000 }).trim()
-      if (p) return { cmd: p, args: ['web'] }
-    } catch { /* PATH 上无 dsh */ }
-    try {
-      const npxRoot = path.join(os.homedir(), '.npm', '_npx')
-      for (const d of fs.readdirSync(npxRoot)) {
-        const bin = path.join(npxRoot, d, 'node_modules', '.bin', 'dsh')
-        if (fs.existsSync(bin)) return { cmd: bin, args: ['web'] }
-      }
-    } catch { /* 无 npx 缓存 */ }
+    // npx 方式（首次需联网下载，后续走缓存）
     try {
       const npm = execFileSync('which', ['npm'], { encoding: 'utf8', timeout: 3000 }).trim()
       if (npm) return { cmd: npm, args: ['exec', '@deepseek-ai/dsh', 'web'] }
