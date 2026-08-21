@@ -662,6 +662,7 @@ function answer(approvalId, outcome, card) {
 
 window.addEventListener('message', (e) => {
   const m = e.data
+  console.log('[DSH Webview] Received message:', m.kind)
   if (m.kind === 'init') {
     modelsData = m.models
     modelSel.innerHTML = ''

@@ -234,18 +234,27 @@ class DshViewProvider implements vscode.WebviewViewProvider {
 
   /** 网关未运行且指向本机时，自动拉起 dsh web 并等待就绪。 */
   private async ensureGateway(webview: vscode.Webview): Promise<void> {
-    if (await this.gatewayAlive(this.base)) return
-    if (!/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?/.test(this.base)) return
+    console.log('[DSH Extension] ensureGateway called, base:', this.base)
+    const alive = await this.gatewayAlive(this.base)
+    console.log('[DSH Extension] gatewayAlive:', alive)
+    if (alive) return
+    if (!/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?/.test(this.base)) {
+      console.log('[DSH Extension] base is not localhost, skipping auto-start')
+      return
+    }
     const found = this.resolveDshCommand()
     if (!found) {
+      console.log('[DSH Extension] No dsh command found')
       this.post(webview, { kind: 'error', message: '网关未运行且未找到 dsh 命令：请先安装（npm i -g @deepseek-ai/dsh）或在设置中指定 gatewayCommand' })
       return
     }
+    console.log('[DSH Extension] Spawning gateway:', found.cmd, found.args)
     const logPath = path.join(os.tmpdir(), 'dsh-web-codon.log')
     let out: number | 'ignore' = 'ignore'
     try { out = fs.openSync(logPath, 'a') } catch { /* 日志不可写则忽略 */ }
     const child = spawn(found.cmd, found.args, { detached: true, stdio: ['ignore', out, out], env: { ...process.env, ...found.env } })
     child.unref()
+    console.log('[DSH Extension] Sending downloading status to webview')
     this.post(webview, { kind: 'gateway', status: 'downloading' })
     for (let i = 0; i < 120; i++) {
       await new Promise((r) => setTimeout(r, 1000))
