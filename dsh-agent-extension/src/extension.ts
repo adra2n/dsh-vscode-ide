@@ -1,4 +1,8 @@
 import * as vscode from 'vscode'
+import { spawn, execFileSync } from 'child_process'
+import * as fs from 'fs'
+import * as os from 'os'
+import * as path from 'path'
 import { DshClient, ModelsView } from './dshClient'
 
 function nonce(): string {
@@ -40,6 +44,7 @@ class DshViewProvider implements vscode.WebviewViewProvider {
     webview.options = { enableScripts: true, localResourceRoots: [this.ext.extensionUri] }
     webview.html = this.html(webview, nonce())
     const base = vscode.workspace.getConfiguration('dshAgent').get<string>('gatewayBase') || 'http://127.0.0.1:3080'
+    this.base = base
     const savedAllow = vscode.workspace.getConfiguration('dshAgent').get<string[]>('autoAllowTools') || []
     this.autoAllow = new Set(savedAllow)
     this.client = new DshClient(base)
@@ -56,6 +61,7 @@ class DshViewProvider implements vscode.WebviewViewProvider {
       try {
         switch (msg.kind) {
           case 'ready': {
+            await this.ensureGateway(webview)
             const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || process.cwd()
             // 优先恢复已有会话，避免 webview 每次重建都新建 session
             let sessionId: string | undefined = typeof msg.sessionId === 'string' ? msg.sessionId : undefined
@@ -137,6 +143,7 @@ class DshViewProvider implements vscode.WebviewViewProvider {
             this.post(webview, {
               kind: 'settings',
               gatewayBase: cfg.get<string>('gatewayBase') || 'http://127.0.0.1:3080',
+              dshCommand: cfg.get<string>('gatewayCommand') || '',
               autoAllowTools: Array.from(this.autoAllow),
               knownTools: Array.from(this.knownTools),
             })
@@ -147,6 +154,7 @@ class DshViewProvider implements vscode.WebviewViewProvider {
             const newBase = (msg.gatewayBase || 'http://127.0.0.1:3080').trim()
             const newTools: string[] = msg.autoAllowTools || []
             await cfg.update('gatewayBase', newBase, vscode.ConfigurationTarget.Global)
+            await cfg.update('gatewayCommand', (msg.dshCommand || '').trim(), vscode.ConfigurationTarget.Global)
             await cfg.update('autoAllowTools', newTools, vscode.ConfigurationTarget.Global)
             this.autoAllow = new Set(newTools)
             const curBase = this.client ? newBase : newBase
@@ -172,6 +180,7 @@ class DshViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async reconnectClient(webview: vscode.Webview, newBase: string) {
+    this.base = newBase
     const sid = this.client?.currentSessionId
     this.client?.dispose()
     this.client = new DshClient(newBase)
@@ -183,6 +192,75 @@ class DshViewProvider implements vscode.WebviewViewProvider {
       const models = await this.client.listModels()
       this.post(webview, { kind: 'init', sessionId: sid, fresh: !sid, models, tree: [], workspaces: [], sessions: [] })
     } catch { /* 网关不可达时由 onStatus 处理 */ }
+  }
+
+  private base = 'http://127.0.0.1:3080'
+
+  private async gatewayAlive(base: string): Promise<boolean> {
+    try {
+      const ctrl = new AbortController()
+      const t = setTimeout(() => ctrl.abort(), 1500)
+      const res = await fetch(`${base}/api/session.list`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type: 'client-request', rpcId: 'probe', method: 'session.list', payload: {} }),
+        signal: ctrl.signal,
+      })
+      clearTimeout(t)
+      return res.ok
+    } catch {
+      return false
+    }
+  }
+
+  private resolveDshCommand(): { cmd: string; args: string[]; env?: Record<string, string> } | undefined {
+    const cfg = vscode.workspace.getConfiguration('dshAgent').get<string>('gatewayCommand')
+    if (cfg && cfg.trim()) {
+      const parts = cfg.trim().split(/\s+/)
+      return { cmd: parts[0], args: [...parts.slice(1), 'web'] }
+    }
+    // 内置运行时：app/dsh-runtime 与 extensions/ 平级，用 Codon 自身二进制的 Node 模式拉起
+    const bundledBin = path.join(this.ext.extensionPath, '..', 'dsh-runtime', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
+    if (fs.existsSync(bundledBin)) {
+      return { cmd: process.execPath, args: [bundledBin, 'web'], env: { ELECTRON_RUN_AS_NODE: '1' } }
+    }
+    try {
+      const p = execFileSync('which', ['dsh'], { encoding: 'utf8', timeout: 3000 }).trim()
+      if (p) return { cmd: p, args: ['web'] }
+    } catch { /* PATH 上无 dsh */ }
+    try {
+      const npxRoot = path.join(os.homedir(), '.npm', '_npx')
+      for (const d of fs.readdirSync(npxRoot)) {
+        const bin = path.join(npxRoot, d, 'node_modules', '.bin', 'dsh')
+        if (fs.existsSync(bin)) return { cmd: bin, args: ['web'] }
+      }
+    } catch { /* 无 npx 缓存 */ }
+    try {
+      const npm = execFileSync('which', ['npm'], { encoding: 'utf8', timeout: 3000 }).trim()
+      if (npm) return { cmd: npm, args: ['exec', '@deepseek-ai/dsh', 'web'] }
+    } catch { /* 无 npm */ }
+    return undefined
+  }
+
+  /** 网关未运行且指向本机时，自动拉起 dsh web 并等待就绪。 */
+  private async ensureGateway(webview: vscode.Webview): Promise<void> {
+    if (await this.gatewayAlive(this.base)) return
+    if (!/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?/.test(this.base)) return
+    const found = this.resolveDshCommand()
+    if (!found) {
+      this.post(webview, { kind: 'error', message: '网关未运行且未找到 dsh 命令：请先安装（npm i -g @deepseek-ai/dsh）或在设置中指定 gatewayCommand' })
+      return
+    }
+    const logPath = path.join(os.tmpdir(), 'dsh-web-codon.log')
+    let out: number | 'ignore' = 'ignore'
+    try { out = fs.openSync(logPath, 'a') } catch { /* 日志不可写则忽略 */ }
+    const child = spawn(found.cmd, found.args, { detached: true, stdio: ['ignore', out, out], env: { ...process.env, ...found.env } })
+    child.unref()
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 1000))
+      if (await this.gatewayAlive(this.base)) return
+    }
+    throw new Error(`DSH 网关自动启动超时（30s），日志：${logPath}`)
   }
 
   private async persistAutoAllow() {
@@ -396,7 +474,7 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
 <button id="stop" class="toolbtn" disabled>停止</button>
 <button id="edit" class="toolbtn">只读/编辑</button>
 <button id="settings" class="toolbtn" title="设置">&#x2699;</button>
-</div><div id="settings-overlay" hidden><div id="settings-panel"><div class="settings-header"><span>设置</span><button id="settings-close" class="toolbtn">&times;</button></div><div class="settings-body"><section class="settings-section"><h3>连接</h3><label>网关地址</label><input id="cfg-gateway" type="text" /></section><section class="settings-section"><h3>权限预设</h3><p class="settings-hint">以下工具将被自动放行，无需逐次确认</p><div id="cfg-tools-list"></div><p id="cfg-tools-empty" class="settings-hint">尚无工具记录。当 AI 请求执行工具时，可点击「始终允许」将其添加。</p></section></div><div class="settings-footer"><button id="settings-save" class="toolbtn">保存</button></div></div></div><div id="log"></div><div id="input"><div class="in-row"><textarea id="ta" rows="1" placeholder="要做什么？"></textarea><button id="send">发送</button></div><div class="in-status"><span id="in-ctx"></span><span>Enter 发送 · Shift+Enter 换行</span></div></div></div></div>
+</div><div id="settings-overlay" hidden><div id="settings-panel"><div class="settings-header"><span>设置</span><button id="settings-close" class="toolbtn">&times;</button></div><div class="settings-body"><section class="settings-section"><h3>连接</h3><label>网关地址</label><input id="cfg-gateway" type="text" /><label>网关启动命令（可选，留空自动探测）</label><input id="cfg-dshcmd" type="text" placeholder="如 /usr/local/bin/dsh" /></section><section class="settings-section"><h3>权限预设</h3><p class="settings-hint">以下工具将被自动放行，无需逐次确认</p><div id="cfg-tools-list"></div><p id="cfg-tools-empty" class="settings-hint">尚无工具记录。当 AI 请求执行工具时，可点击「始终允许」将其添加。</p></section></div><div class="settings-footer"><button id="settings-save" class="toolbtn">保存</button></div></div></div><div id="log"></div><div id="input"><div class="in-row"><textarea id="ta" rows="1" placeholder="要做什么？"></textarea><button id="send">发送</button></div><div class="in-status"><span id="in-ctx"></span><span>Enter 发送 · Shift+Enter 换行</span></div></div></div></div>
 <script nonce="${n}" src="${src}"></script></body></html>`
   }
 }

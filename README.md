@@ -32,8 +32,22 @@ dsh-vscode-ide/
 
 ## 前置条件
 
-- [Node.js](https://nodejs.org/) >= 20
-- DSH 网关运行在 `http://127.0.0.1:3080`（通过 `dsh web` 启动）
+- [Node.js](https://nodejs.org/) >= 20（仅开发编译需要；分发版内置 DSH 运行时，用户零依赖）
+- 网关由扩展**自动拉起**：面板初始化时探测 `127.0.0.1:3080`，未运行则自动启动 `dsh web`
+
+### 内置 DSH 运行时（零依赖分发）
+
+打包后运行 vendor 脚本，把 `@deepseek-ai/dsh` 装进应用：
+
+```bash
+scripts/vendor-dsh.sh /path/to/Codon.app/Contents/Resources/app
+# 可选：DSH_VERSION=x.y.z 覆盖版本（默认固定为已验证版本）
+```
+
+产物位于 `app/dsh-runtime/`。扩展探测到后用 Codon 自身二进制的 Node 模式
+（`ELECTRON_RUN_AS_NODE=1`）拉起网关，无需用户安装 node/npm/dsh。
+
+启动命令优先级：设置 `gatewayCommand` > 内置运行时 > PATH 上的 `dsh` > npx 缓存 > `npm exec`。
 
 ## 开发
 
@@ -63,6 +77,8 @@ code --extensionDevelopmentPath=dsh-agent-extension .
 | 键 | 默认值 | 说明 |
 |---|---|---|
 | `dshAgent.gatewayBase` | `http://127.0.0.1:3080` | DSH apiproxy 网关地址 |
+| `dshAgent.gatewayCommand` | `""` | 网关启动命令（留空自动探测/内置） |
+| `dshAgent.autoAllowTools` | `[]` | 自动放行的工具名列表 |
 
 ## 架构
 

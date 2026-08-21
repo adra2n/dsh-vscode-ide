@@ -22,10 +22,10 @@
 
 ## 3. DSH 集成 (dsh-integration)
 
-- [ ] 3.1 本地 DSH 运行时分发方式（内置 / 首下载 / 用户自带）
+- [x] 3.1 本地 DSH 运行时分发方式：**内置**——`scripts/vendor-dsh.sh` 把 `@deepseek-ai/dsh` 装入 `app/dsh-runtime/`，扩展用 Codon 二进制 Node 模式（ELECTRON_RUN_AS_NODE）自动拉起网关（探测链：gatewayCommand 设置 > 内置 > PATH > npx > npm exec）
 - [x] 3.2 直连 `apiproxy` 网关（HTTP POST + WebSocket），client 已实现（含 RPC 超时、WS 断线指数退避重连、按 session 过滤帧、dispose）；SSE 兜底暂缺，重连已覆盖大部分场景
-- [x] 3.3 单一 session 管理（连续上下文）：webview 重建时恢复复用会话、侧栏切换、显式新建；待补：会话删除/重命名
-- [ ] 3.4 设置：模型默认自托管（base URL / Key）、权限预设
+- [x] 3.3 单一 session 管理（连续上下文）：webview 重建时恢复复用会话、侧栏切换、显式新建；待补：会话删除/重命名（DSH 无 session.delete RPC，需文件系统 + 网关重启）
+- [~] 3.4 设置：设置面板已实现（网关地址 / 启动命令 / 权限预设持久化，Global 配置）；模型自托管 Key（DSH credentials API）待接
 - [ ] 3.5 分发版**禁用 `dsh-password-gate`** 鉴权插件（见 1.5 坑），保证本机单人免登录
 
 ## 4. 编辑器内 agent 面板 (agent-conversation-panel)
@@ -41,7 +41,7 @@
 
 - [ ] 5.1 反射 DSH 落盘改动（+ 可选 gutter ✎）
 - [ ] 5.2 改动文件清单 + 点击打开原生 diff
-- [ ] 5.3 上下文注入（文件 / 选区 / 诊断 / git diff / 终端）
+- [-] 5.3 ~~上下文注入（文件 / 选区 / 诊断 / git diff / 终端）~~ 已移除：产品定位纯 AI 智能体模式，上下文由 agent 通过自身工具获取（commit c2e5061）
 
 ## 6. 分发与打包 (distribution-packaging)
 

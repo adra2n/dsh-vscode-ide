@@ -22,6 +22,7 @@ const settingsOverlay = document.getElementById('settings-overlay')
 const settingsClose = document.getElementById('settings-close')
 const settingsSave = document.getElementById('settings-save')
 const cfgGateway = document.getElementById('cfg-gateway')
+const cfgDshCmd = document.getElementById('cfg-dshcmd')
 const cfgToolList = document.getElementById('cfg-tools-list')
 const cfgToolsEmpty = document.getElementById('cfg-tools-empty')
 
@@ -740,6 +741,7 @@ window.addEventListener('message', (e) => {
     appendLine('⚠ ' + m.message, 'tool')
   } else if (m.kind === 'settings') {
     if (cfgGateway) cfgGateway.value = m.gatewayBase || ''
+    if (cfgDshCmd) cfgDshCmd.value = m.dshCommand || ''
     if (cfgToolList) {
       cfgToolList.innerHTML = ''
       const allTools = new Set([...(m.knownTools || []), ...(m.autoAllowTools || [])])
@@ -832,6 +834,7 @@ if (settingsSave) settingsSave.onclick = () => {
   vscode.postMessage({
     kind: 'saveSettings',
     gatewayBase: cfgGateway ? cfgGateway.value.trim() : undefined,
+    dshCommand: cfgDshCmd ? cfgDshCmd.value.trim() : undefined,
     autoAllowTools: tools,
   })
 }

@@ -31,6 +31,11 @@
           "default": "http://127.0.0.1:3080",
           "description": "DSH apiproxy gateway base URL."
         },
+        "dshAgent.gatewayCommand": {
+          "type": "string",
+          "default": "",
+          "description": "用于自动启动网关的 dsh 命令（留空则自动探测：PATH 上的 dsh → npx 缓存 → npm exec）。"
+        },
         "dshAgent.autoAllowTools": {
           "type": "array",
           "items": { "type": "string" },
