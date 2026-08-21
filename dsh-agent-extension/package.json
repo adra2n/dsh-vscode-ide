@@ -1,0 +1,45 @@
+{
+  "name": "dsh-agent",
+  "displayName": "Codon Agent",
+  "description": "AI-first agent panel for Codon, backed by the DeepSeek Harness (DSH) gateway.",
+  "version": "0.1.0",
+  "publisher": "codon",
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished", "onView:dshAgent.view"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        { "id": "dshAgent", "title": "AI", "icon": "media/ai.svg" }
+      ]
+    },
+    "views": {
+      "dshAgent": [
+        { "type": "webview", "id": "dshAgent.view", "name": "AI 对话" }
+      ]
+    },
+    "commands": [
+      { "command": "dshAgent.openFile", "title": "DSH: 打开文件（右分屏）" },
+      { "command": "dshAgent.toggleEdit", "title": "DSH: 切换当前文件只读/可编辑" }
+    ],
+    "configuration": {
+      "title": "DSH Agent",
+      "properties": {
+        "dshAgent.gatewayBase": {
+          "type": "string",
+          "default": "http://127.0.0.1:3080",
+          "description": "DSH apiproxy gateway base URL."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.4.0"
+  }
+}
