@@ -232,6 +232,16 @@ class DshViewProvider implements vscode.WebviewViewProvider {
     return undefined
   }
 
+  /** 检查是否已有 dsh 网关进程在运行（通过进程名判断） */
+  private isGatewayProcessRunning(): boolean {
+    try {
+      const result = execFileSync('pgrep', ['-f', 'dsh.*web'], { encoding: 'utf8', timeout: 3000 }).trim()
+      return result.length > 0
+    } catch {
+      return false
+    }
+  }
+
   /** 网关未运行且指向本机时，自动拉起 dsh web 并等待就绪。 */
   private async ensureGateway(webview: vscode.Webview): Promise<void> {
     console.log('[DSH Extension] ensureGateway called, base:', this.base)
@@ -241,6 +251,16 @@ class DshViewProvider implements vscode.WebviewViewProvider {
     if (!/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?/.test(this.base)) {
       console.log('[DSH Extension] base is not localhost, skipping auto-start')
       return
+    }
+    // 检查是否已有网关进程在运行（避免重复启动 npx）
+    if (this.isGatewayProcessRunning()) {
+      console.log('[DSH Extension] Gateway process already running, waiting...')
+      this.post(webview, { kind: 'gateway', status: 'downloading' })
+      for (let i = 0; i < 120; i++) {
+        await new Promise((r) => setTimeout(r, 1000))
+        if (await this.gatewayAlive(this.base)) return
+      }
+      throw new Error(`DSH 网关启动超时（120s），可能正在下载依赖`)
     }
     const found = this.resolveDshCommand()
     if (!found) {
