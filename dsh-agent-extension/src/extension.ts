@@ -1,5 +1,4 @@
 import * as vscode from 'vscode'
-import { execFile } from 'child_process'
 import { DshClient, ModelsView } from './dshClient'
 
 function nonce(): string {
@@ -98,14 +97,7 @@ class DshViewProvider implements vscode.WebviewViewProvider {
             break
           }
           case 'prompt': {
-            const assembled = await this.assemblePromptWithCtx(msg.text, msg.contexts || [])
-            await this.client!.sendPrompt(assembled.text)
-            if (assembled.skipped.length) this.post(webview, { kind: 'contextSkipped', reasons: assembled.skipped })
-            break
-          }
-          case 'attachContext': {
-            const label = this.contextLabel(msg.type)
-            this.post(webview, { kind: 'contextAttached', type: msg.type, label })
+            await this.client!.sendPrompt(msg.text)
             break
           }
           case 'stop':
@@ -199,139 +191,6 @@ class DshViewProvider implements vscode.WebviewViewProvider {
       Array.from(this.autoAllow),
       vscode.ConfigurationTarget.Global,
     )
-  }
-
-  private wsRelPath(fsPath: string): string {
-    const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
-    if (!root || !fsPath.startsWith(root)) return fsPath
-    return fsPath.slice(root.length).replace(/^\//, '')
-  }
-
-  contextLabel(type: string): string {
-    const ed = vscode.window.activeTextEditor
-    switch (type) {
-      case 'file': {
-        if (!ed) return '当前文件'
-        return this.wsRelPath(ed.document.uri.fsPath)
-      }
-      case 'selection': {
-        if (!ed || ed.selection.isEmpty) return '选区'
-        const s = ed.selection
-        return `${this.wsRelPath(ed.document.uri.fsPath)}:${s.start.line + 1}-${s.end.line + 1}`
-      }
-      case 'diagnostics': return '诊断'
-      case 'gitDiff': return 'Git diff'
-      case 'terminal': return '终端输出'
-      default: return type
-    }
-  }
-
-  private esc(s: string): string { return s.replace(/<\/context>/g, '<\\/context>') }
-
-  private truncate(s: string, max: number): string {
-    if (s.length <= max) return s
-    return s.slice(0, max) + '\n…[已截断]'
-  }
-
-  private async withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
-    return Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))])
-  }
-
-  private async assemblePromptWithCtx(userText: string, contexts: string[]): Promise<{ text: string; skipped: { type: string; reason: string }[] }> {
-    const skipped: { type: string; reason: string }[] = []
-    const blocks: string[] = []
-    const ed = vscode.window.activeTextEditor
-    const types = new Set(contexts)
-    // 自动选区：有非空选区且未显式附加 selection 时自动包含
-    if (ed && !ed.selection.isEmpty && !types.has('selection')) types.add('selection')
-
-    const add = async (type: string, fn: () => Promise<string | null>, reasonIfEmpty: string) => {
-      if (!types.has(type)) return
-      try {
-        const val = await this.withTimeout(fn(), 5000)
-        if (val) blocks.push(val)
-        else skipped.push({ type, reason: reasonIfEmpty })
-      } catch (e: any) {
-        skipped.push({ type, reason: e?.message === 'timeout' ? '采集超时' : String(e?.message ?? e) })
-      }
-    }
-
-    await add('selection', () => this.collectSelection(ed), '当前无选区')
-    await add('file', () => this.collectFile(ed), '无打开的编辑器')
-    await add('diagnostics', () => this.collectDiagnostics(), '无诊断信息')
-    await add('gitDiff', () => this.collectGitDiff(), '非 git 仓库或无改动')
-    await add('terminal', () => this.collectTerminal(), '无活动终端')
-
-    if (blocks.length === 0) return { text: userText, skipped }
-    const wsName = vscode.workspace.workspaceFolders?.[0]?.name || ''
-    const ctx = `<attached-context workspace="${wsName}">\n${blocks.join('\n')}\n</attached-context>`
-    return { text: `${ctx}\n\n<user-message>\n${userText}\n</user-message>`, skipped }
-  }
-
-  private async collectSelection(ed?: vscode.TextEditor): Promise<string | null> {
-    if (!ed || ed.selection.isEmpty) return null
-    const text = ed.document.getText(ed.selection)
-    const p = this.wsRelPath(ed.document.uri.fsPath)
-    const lines = `${ed.selection.start.line + 1}-${ed.selection.end.line + 1}`
-    return `<context type="selection" path="${p}" lines="${lines}">\n${this.esc(this.truncate(text, 32 * 1024))}\n</context>`
-  }
-
-  private async collectFile(ed?: vscode.TextEditor): Promise<string | null> {
-    if (!ed) return null
-    const p = this.wsRelPath(ed.document.uri.fsPath)
-    return `<context type="file" path="${p}">\n${this.esc(this.truncate(ed.document.getText(), 64 * 1024))}\n</context>`
-  }
-
-  private async collectDiagnostics(): Promise<string | null> {
-    const folder = vscode.workspace.workspaceFolders?.[0]
-    if (!folder) return null
-    const root = folder.uri.fsPath
-    const lines: string[] = []
-    for (const [uri, items] of vscode.languages.getDiagnostics()) {
-      if (!uri.fsPath.startsWith(root)) continue
-      for (const d of items) {
-        if (d.severity !== vscode.DiagnosticSeverity.Error && d.severity !== vscode.DiagnosticSeverity.Warning) continue
-        const sev = d.severity === vscode.DiagnosticSeverity.Error ? 'error' : 'warning'
-        lines.push(`${this.wsRelPath(uri.fsPath)}:${d.range.start.line + 1}:${d.range.start.character + 1} [${sev}] ${d.message}`)
-        if (lines.length >= 50) break
-      }
-      if (lines.length >= 50) break
-    }
-    if (lines.length === 0) return null
-    return `<context type="diagnostics">\n${this.esc(lines.join('\n'))}\n</context>`
-  }
-
-  private async collectGitDiff(): Promise<string | null> {
-    const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
-    if (!cwd) return null
-    const run = (args: string[]) => new Promise<string>((resolve, reject) => {
-      execFile('git', args, { cwd, maxBuffer: 8 * 1024 * 1024, timeout: 5000 }, (err, stdout) => {
-        if (err) reject(err)
-        else resolve(stdout)
-      })
-    })
-    const parts: string[] = []
-    const unstaged = await run(['diff']).catch(() => '')
-    const staged = await run(['diff', '--staged']).catch(() => '')
-    if (staged) parts.push('# staged\n' + this.truncate(staged, 64 * 1024))
-    if (unstaged) parts.push('# unstaged\n' + this.truncate(unstaged, 64 * 1024))
-    if (parts.length === 0) return null
-    return `<context type="git-diff">\n${this.esc(parts.join('\n\n'))}\n</context>`
-  }
-
-  private async collectTerminal(): Promise<string | null> {
-    const term = vscode.window.activeTerminal
-    if (!term) return null
-    const clip = vscode.env.clipboard
-    const prev = await Promise.resolve(clip.readText()).catch(() => '')
-    await vscode.commands.executeCommand('workbench.action.terminal.selectAll')
-    await vscode.commands.executeCommand('workbench.action.terminal.copySelection')
-    await new Promise((r) => setTimeout(r, 200))
-    let out = await Promise.resolve(clip.readText()).catch(() => '')
-    if (prev !== out) await Promise.resolve(clip.writeText(prev)).catch(() => undefined)
-    if (!out.trim()) return null
-    if (out.length > 32 * 1024) out = out.slice(out.length - 32 * 1024)
-    return `<context type="terminal" name="${term.name}">\n${this.esc(out)}\n</context>`
   }
 
   private approvals = new Map<string, { rpcId: string; sessionId: string; toolName: string }>()
@@ -502,19 +361,6 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
 #send { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; border-radius: 8px; padding: 9px 18px; cursor: pointer; font-size: 13px; height: 38px; }
 #send:hover { background: var(--vscode-button-hoverBackground); }
 .in-status { display: flex; justify-content: space-between; margin-top: 5px; font-size: 11px; opacity: .55; }
-#ctx-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
-#ctx-row:empty { display: none; }
-.ctx-chip-item { display: inline-flex; align-items: center; gap: 5px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); border-radius: 10px; padding: 2px 8px; font-size: 11.5px; max-width: 200px; }
-.ctx-chip-item .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ctx-chip-item .rm { cursor: pointer; opacity: .6; font-size: 13px; line-height: 1; }
-.ctx-chip-item .rm:hover { opacity: 1; }
-#attach { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: 1px solid var(--vscode-button-border, transparent); border-radius: 8px; padding: 9px 12px; cursor: pointer; font-size: 13px; height: 38px; }
-#attach:hover { background: var(--vscode-button-secondaryHoverBackground); }
-#attach-wrap { position: relative; display: inline-block; }
-#attach-menu { position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 50; background: var(--vscode-editorWidget-background); border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border)); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,.3); min-width: 160px; padding: 4px 0; }
-#attach-menu[hidden] { display: none; }
-#attach-menu .mi { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--vscode-foreground); padding: 6px 12px; font-size: 12.5px; cursor: pointer; }
-#attach-menu .mi:hover { background: var(--vscode-list-hoverBackground); }
 .hero { margin: auto; text-align: center; max-width: 460px; }
 .hero .logo { font-size: 30px; font-weight: 700; letter-spacing: 1px; }
 .hero .logo b { color: var(--vscode-textLink-foreground); }
@@ -550,7 +396,7 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
 <button id="stop" class="toolbtn" disabled>停止</button>
 <button id="edit" class="toolbtn">只读/编辑</button>
 <button id="settings" class="toolbtn" title="设置">&#x2699;</button>
-</div><div id="settings-overlay" hidden><div id="settings-panel"><div class="settings-header"><span>设置</span><button id="settings-close" class="toolbtn">&times;</button></div><div class="settings-body"><section class="settings-section"><h3>连接</h3><label>网关地址</label><input id="cfg-gateway" type="text" /></section><section class="settings-section"><h3>权限预设</h3><p class="settings-hint">以下工具将被自动放行，无需逐次确认</p><div id="cfg-tools-list"></div><p id="cfg-tools-empty" class="settings-hint">尚无工具记录。当 AI 请求执行工具时，可点击「始终允许」将其添加。</p></section></div><div class="settings-footer"><button id="settings-save" class="toolbtn">保存</button></div></div></div><div id="log"></div><div id="input"><div id="ctx-row"></div><div class="in-row"><span id="attach-wrap"><button id="attach" title="添加上下文">＋</button><div id="attach-menu" hidden><button class="mi" data-t="file">当前文件</button><button class="mi" data-t="selection">选区</button><button class="mi" data-t="diagnostics">诊断</button><button class="mi" data-t="gitDiff">Git diff</button><button class="mi" data-t="terminal">终端输出</button></div></span><textarea id="ta" rows="1" placeholder="要做什么？"></textarea><button id="send">发送</button></div><div class="in-status"><span id="in-ctx"></span><span>Enter 发送 · Shift+Enter 换行</span></div></div></div></div>
+</div><div id="settings-overlay" hidden><div id="settings-panel"><div class="settings-header"><span>设置</span><button id="settings-close" class="toolbtn">&times;</button></div><div class="settings-body"><section class="settings-section"><h3>连接</h3><label>网关地址</label><input id="cfg-gateway" type="text" /></section><section class="settings-section"><h3>权限预设</h3><p class="settings-hint">以下工具将被自动放行，无需逐次确认</p><div id="cfg-tools-list"></div><p id="cfg-tools-empty" class="settings-hint">尚无工具记录。当 AI 请求执行工具时，可点击「始终允许」将其添加。</p></section></div><div class="settings-footer"><button id="settings-save" class="toolbtn">保存</button></div></div></div><div id="log"></div><div id="input"><div class="in-row"><textarea id="ta" rows="1" placeholder="要做什么？"></textarea><button id="send">发送</button></div><div class="in-status"><span id="in-ctx"></span><span>Enter 发送 · Shift+Enter 换行</span></div></div></div></div>
 <script nonce="${n}" src="${src}"></script></body></html>`
   }
 }

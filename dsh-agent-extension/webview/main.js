@@ -24,9 +24,6 @@ const settingsSave = document.getElementById('settings-save')
 const cfgGateway = document.getElementById('cfg-gateway')
 const cfgToolList = document.getElementById('cfg-tools-list')
 const cfgToolsEmpty = document.getElementById('cfg-tools-empty')
-const attachBtn = document.getElementById('attach')
-const attachMenu = document.getElementById('attach-menu')
-const ctxRow = document.getElementById('ctx-row')
 
 let modelsData = null
 // 根据当前选中模型同步“思考强度”下拉（无 reasoning 能力的模型隐藏）
@@ -762,14 +759,6 @@ window.addEventListener('message', (e) => {
     }
   } else if (m.kind === 'settingsSaved') {
     closeSettings()
-  } else if (m.kind === 'contextAttached') {
-    if (!attachedContexts.some(c => c.type === m.type)) {
-      attachedContexts.push({ type: m.type, label: m.label })
-      renderCtxChips()
-    }
-  } else if (m.kind === 'contextSkipped') {
-    const rs = (m.reasons || []).map(r => r.type + ': ' + r.reason).join('；')
-    if (rs) appendLine('⚠ 部分上下文未附加 — ' + rs, 'tool')
   }
 })
 
@@ -782,48 +771,12 @@ if (effortSel) effortSel.onchange = () => sendSelectModel()
 let optimisticUserEl = null
 let optimisticUserText = ''
 
-let attachedContexts = []
-function renderCtxChips() {
-  if (!ctxRow) return
-  ctxRow.innerHTML = ''
-  for (const c of attachedContexts) {
-    const el = document.createElement('span')
-    el.className = 'ctx-chip-item'
-    const lbl = document.createElement('span')
-    lbl.className = 'lbl'
-    lbl.textContent = c.label
-    lbl.title = c.label
-    const rm = document.createElement('span')
-    rm.className = 'rm'
-    rm.textContent = '×'
-    rm.onclick = () => { attachedContexts = attachedContexts.filter(x => x.type !== c.type); renderCtxChips() }
-    el.appendChild(lbl)
-    el.appendChild(rm)
-    ctxRow.appendChild(el)
-  }
-}
-function toggleAttachMenu(show) {
-  if (attachMenu) attachMenu.hidden = !(show ?? attachMenu.hidden)
-}
-if (attachBtn) attachBtn.onclick = () => toggleAttachMenu()
-if (attachMenu) attachMenu.querySelectorAll('.mi').forEach(mi => {
-  mi.onclick = () => {
-    toggleAttachMenu(false)
-    vscode.postMessage({ kind: 'attachContext', type: mi.dataset.t })
-  }
-})
-document.addEventListener('click', (e) => {
-  if (attachMenu && !attachMenu.hidden && !e.target.closest('#attach-wrap')) toggleAttachMenu(false)
-})
-
 function send() {
   const text = ta.value.trim()
   if (!text) return
   userSentMessage = true
-  vscode.postMessage({ kind: 'prompt', text, contexts: attachedContexts.map(c => c.type) })
+  vscode.postMessage({ kind: 'prompt', text })
   ta.value = ''
-  attachedContexts = []
-  renderCtxChips()
   optimisticUserText = text
   optimisticUserEl = bubble(text, 'user')
   showPending()
