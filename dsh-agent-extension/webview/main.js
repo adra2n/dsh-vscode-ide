@@ -715,17 +715,25 @@ window.addEventListener('message', (e) => {
       statusEl.textContent = '⚠ DSH 网关未连接（自动重连中）'
       statusEl.classList.add('warn')
     } else if (m.status === 'downloading') {
+      console.log('[DSH] Received downloading status')
       statusEl.textContent = '⏳ DSH 正在下载中，请稍候...'
       statusEl.classList.add('warn')
       // 在对话区域显示下载提示
       if (!document.getElementById('dsh-downloading-msg')) {
+        console.log('[DSH] Creating downloading UI element')
         ensureHero()
+        const hero = document.querySelector('.hero')
+        console.log('[DSH] Hero element:', hero)
         const msg = document.createElement('div')
         msg.id = 'dsh-downloading-msg'
         msg.className = 'downloading-msg'
         msg.innerHTML = '<div class="downloading-icon">⏳</div><div class="downloading-text">DSH 运行时正在下载中...</div><div class="downloading-hint">首次启动需要下载 DSH 网关，请耐心等待</div>'
-        const hero = document.querySelector('.hero')
-        if (hero) hero.appendChild(msg)
+        if (hero) {
+          hero.appendChild(msg)
+          console.log('[DSH] Downloading message appended to hero')
+        } else {
+          console.warn('[DSH] Hero element not found!')
+        }
       }
     } else if (m.status === 'open') {
       statusEl.textContent = statusTitle
