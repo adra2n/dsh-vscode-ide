@@ -227,7 +227,7 @@ class DshViewProvider implements vscode.WebviewViewProvider {
     // npx 方式（首次需联网下载，后续走缓存）
     try {
       const npm = execFileSync('which', ['npm'], { encoding: 'utf8', timeout: 3000 }).trim()
-      if (npm) return { cmd: npm, args: ['exec', '@deepseek-ai/dsh', 'web'] }
+      if (npm) return { cmd: npm, args: ['exec', '@deepseek-ai/dsh@0.1.0-rc.7', 'web'] }
     } catch { /* 无 npm */ }
     return undefined
   }
@@ -246,11 +246,12 @@ class DshViewProvider implements vscode.WebviewViewProvider {
     try { out = fs.openSync(logPath, 'a') } catch { /* 日志不可写则忽略 */ }
     const child = spawn(found.cmd, found.args, { detached: true, stdio: ['ignore', out, out], env: { ...process.env, ...found.env } })
     child.unref()
-    for (let i = 0; i < 30; i++) {
+    this.post(webview, { kind: 'gateway', status: 'downloading' })
+    for (let i = 0; i < 120; i++) {
       await new Promise((r) => setTimeout(r, 1000))
       if (await this.gatewayAlive(this.base)) return
     }
-    throw new Error(`DSH 网关自动启动超时（30s），日志：${logPath}`)
+    throw new Error(`DSH 网关自动启动超时（120s），日志：${logPath}`)
   }
 
   private async persistAutoAllow() {

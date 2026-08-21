@@ -707,12 +707,15 @@ window.addEventListener('message', (e) => {
     vscode.postMessage({ kind: 'loadWorkspaces' })
   } else if (m.kind === 'gateway') {
     if (gwDot) {
-      gwDot.classList.toggle('wait', m.status === 'connecting')
+      gwDot.classList.toggle('wait', m.status === 'connecting' || m.status === 'downloading')
       gwDot.classList.toggle('off', m.status === 'closed')
-      gwDot.title = m.status === 'closed' ? 'DSH 网关未连接（自动重连中）' : m.status === 'connecting' ? '正在连接 DSH 网关' : 'DSH 网关已连接'
+      gwDot.title = m.status === 'closed' ? 'DSH 网关未连接（自动重连中）' : m.status === 'connecting' ? '正在连接 DSH 网关' : m.status === 'downloading' ? 'DSH 正在下载中...' : 'DSH 网关已连接'
     }
     if (m.status === 'closed') {
       statusEl.textContent = '⚠ DSH 网关未连接（自动重连中）'
+      statusEl.classList.add('warn')
+    } else if (m.status === 'downloading') {
+      statusEl.textContent = '⏳ DSH 正在下载中，请稍候...'
       statusEl.classList.add('warn')
     } else if (m.status === 'open') {
       statusEl.textContent = statusTitle
