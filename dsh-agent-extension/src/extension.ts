@@ -93,7 +93,7 @@ class DshViewProvider implements vscode.WebviewViewProvider {
             break
           case 'answer':
             try {
-              await this.client!.answerQuestion(msg.questionId, msg.response)
+              await this.client!.respond(msg.rpcId, { selected: msg.response })
             } catch (e: any) {
               this.post(webview, { kind: 'error', message: '回答失败: ' + String(e?.message ?? e) })
             }

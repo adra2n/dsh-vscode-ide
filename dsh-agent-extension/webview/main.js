@@ -20,6 +20,33 @@ function renderSidebar(workspaces, sessions) {
   wsList.innerHTML = ''
   const sessionMap = {}
   for (const s of sessions) sessionMap[s.sessionId] = s
+  const assignedIds = new Set()
+  for (const ws of workspaces) for (const sid of (ws.sessionIds || [])) assignedIds.add(sid)
+  // Ungrouped sessions
+  const ungrouped = sessions.filter(s => !assignedIds.has(s.sessionId))
+  if (ungrouped.length > 0) {
+    const group = document.createElement('div')
+    group.className = 'ws-group'
+    const name = document.createElement('div')
+    name.className = 'ws-name open'
+    name.innerHTML = '<span class="arrow">▸</span> 未分组 (' + ungrouped.length + ')'
+    const sessContainer = document.createElement('div')
+    sessContainer.className = 'ws-sessions open'
+    name.onclick = () => { name.classList.toggle('open'); sessContainer.classList.toggle('open') }
+    for (const s of ungrouped) {
+      const item = document.createElement('div')
+      item.className = 'sess-item' + (s.sessionId === activeSessionId ? ' active' : '')
+      const title = s.projections?.values?.title || s.sessionId.slice(0, 12)
+      const time = s.updatedAt ? timeAgo(s.updatedAt) : ''
+      item.innerHTML = '<span class="sess-title">' + escHtml(title) + '</span><span class="sess-time">' + time + '</span>'
+      item.onclick = () => loadHistory(s.sessionId)
+      sessContainer.appendChild(item)
+    }
+    group.appendChild(name)
+    group.appendChild(sessContainer)
+    wsList.appendChild(group)
+  }
+  // Workspaces
   for (const ws of workspaces) {
     const group = document.createElement('div')
     group.className = 'ws-group'
@@ -70,48 +97,72 @@ function renderHistoryEvent(ev) {
     for (const msg of inserted) {
       if (msg.role === 'user') {
         const text = (msg.content || []).filter(c => c.type === 'text').map(c => c.text).join('')
-        if (text) appendLine(text, 'user')
+        if (text) bubble(text, 'user')
+      }
+    }
+  } else if (t === 'assistant/chunk') {
+    const chunk = ev.data?.chunk
+    if (!chunk) return
+    const idx = 'h_' + (ev.data?.turn || 0) + '_' + chunk.index
+    if (chunk.type === 'block-start') {
+      if (chunk.blockType === 'text') {
+        const el = document.createElement('div')
+        el.className = 'assistant'
+        el.innerHTML = ''
+        log.appendChild(el)
+        streamingBlocks[idx] = { type: 'text', el, raw: '' }
+      } else if (chunk.blockType === 'reasoning') {
+        const wrapper = document.createElement('div')
+        wrapper.className = 'reasoning collapsed'
+        const toggle = document.createElement('div')
+        toggle.className = 'reasoning-toggle'
+        toggle.textContent = '▸ 思考过程'
+        toggle.onclick = () => wrapper.classList.toggle('collapsed')
+        const body = document.createElement('div')
+        body.className = 'reasoning-body'
+        wrapper.appendChild(toggle)
+        wrapper.appendChild(body)
+        log.appendChild(wrapper)
+        streamingBlocks[idx] = { type: 'reasoning', el: body }
+      }
+    } else if (chunk.type === 'text-delta' && streamingBlocks[idx]) {
+      streamingBlocks[idx].raw += (chunk.text || '')
+    } else if (chunk.type === 'reasoning-delta' && streamingBlocks[idx]) {
+      streamingBlocks[idx].el.textContent += (chunk.text || '')
+    } else if (chunk.type === 'block-end' && streamingBlocks[idx]) {
+      const b = streamingBlocks[idx]
+      if (chunk.block?.text) {
+        b.el.innerHTML = renderMd(chunk.block.text)
+      }
+      delete streamingBlocks[idx]
+    }
+  } else if (t === 'assistant/message') {
+    const msg = ev.data?.message
+    if (!msg?.content) return
+    for (const c of msg.content) {
+      if (c.type === 'text' && c.text) bubble(c.text, 'assistant')
+      else if (c.type === 'reasoning' && c.text) {
+        const wrapper = document.createElement('div')
+        wrapper.className = 'reasoning collapsed'
+        const toggle = document.createElement('div')
+        toggle.className = 'reasoning-toggle'
+        toggle.textContent = '▸ 思考过程'
+        toggle.onclick = () => wrapper.classList.toggle('collapsed')
+        const body = document.createElement('div')
+        body.className = 'reasoning-body'
+        body.textContent = c.text
+        wrapper.appendChild(toggle)
+        wrapper.appendChild(body)
+        log.appendChild(wrapper)
       }
     }
   } else if (t === 'session/event') {
-    const inner = ev.event || ev
-    const it = inner?.type
-    if (it === 'assistant/chunk') {
-      const chunk = (inner.data || inner).chunk
-      if (!chunk) return
-      const idx = chunk.index
-      if (chunk.type === 'block-start') {
-        if (chunk.blockType === 'reasoning') {
-          const wrapper = document.createElement('div')
-          wrapper.className = 'reasoning collapsed'
-          const toggle = document.createElement('div')
-          toggle.className = 'reasoning-toggle'
-          toggle.textContent = '▸ 思考过程'
-          toggle.onclick = () => wrapper.classList.toggle('collapsed')
-          const body = document.createElement('div')
-          body.className = 'reasoning-body'
-          body.textContent = ''
-          wrapper.appendChild(toggle)
-          wrapper.appendChild(body)
-          log.appendChild(wrapper)
-          streamingBlocks['h_' + idx] = { type: 'reasoning', el: body }
-        } else if (chunk.blockType === 'text') {
-          const el = document.createElement('div')
-          el.className = 'assistant'
-          el.innerHTML = ''
-          log.appendChild(el)
-          streamingBlocks['h_' + idx] = { type: 'text', el }
-        }
-      } else if (chunk.type === 'block-end') {
-        const key = 'h_' + idx
-        if (chunk.block?.text && streamingBlocks[key]) {
-          streamingBlocks[key].el.innerHTML = renderMd(chunk.block.text)
-        }
-        delete streamingBlocks[key]
-      }
-    } else if (it === 'step/start') {
-      const toolName = inner.name || inner.toolName || inner.tool || ''
-      const toolTitle = inner.title || ''
+    const inner = ev.event
+    if (!inner) return
+    const it = inner.type
+    if (it === 'step/start') {
+      const toolName = inner.data?.name || inner.data?.toolName || ''
+      const toolTitle = inner.data?.title || ''
       const label = toolTitle || toolName
       if (!label) return
       const stepEl = document.createElement('div')
