@@ -23,18 +23,18 @@
 ## 3. DSH 集成 (dsh-integration)
 
 - [ ] 3.1 本地 DSH 运行时分发方式（内置 / 首下载 / 用户自带）
-- [ ] 3.2 直连 `apiproxy` 网关（HTTP POST + WebSocket；SSE 兜底），实现 client（以 `spike/probe.mjs` 为参照）
-- [ ] 3.3 单一 session 管理（连续上下文）
+- [x] 3.2 直连 `apiproxy` 网关（HTTP POST + WebSocket），client 已实现（含 RPC 超时、WS 断线指数退避重连、按 session 过滤帧、dispose）；SSE 兜底暂缺，重连已覆盖大部分场景
+- [x] 3.3 单一 session 管理（连续上下文）：webview 重建时恢复复用会话、侧栏切换、显式新建；待补：会话删除/重命名
 - [ ] 3.4 设置：模型默认自托管（base URL / Key）、权限预设
 - [ ] 3.5 分发版**禁用 `dsh-password-gate`** 鉴权插件（见 1.5 坑），保证本机单人免登录
 
 ## 4. 编辑器内 agent 面板 (agent-conversation-panel)
 
-- [ ] 4.1 底部原生面板骨架（活动栏入口）
-- [ ] 4.2 实时对话转录（流式）
-- [ ] 4.3 Gated 内联权限（✓ / ✗ / ⊘ 始终）+ 非焦点提示
-- [ ] 4.4 暂停 / 停止 / 中途插话
-- [ ] 4.5 可折叠 Steps / Terminal / Changed files 视图
+- [x] 4.1 面板骨架（活动栏入口 + webview；已迁至右侧二级侧栏，AI 优先布局）
+- [x] 4.2 实时对话转录（流式，含 reasoning 折叠 / markdown 渲染 + XSS 转义 + CSP）
+- [~] 4.3 Gated 内联权限：面板内联卡片 ✓ / ✗ / ⊘始终（始终允许为适配层实现，DSH 侧权限预设待接）+ 面板失焦时通知兜底
+- [~] 4.4 暂停 / 停止 / 中途插话：停止按钮已接 `session.stop`（DSH 侧方法名待联调确认）；插话经 `mode: queue` 支持；暂停未做
+- [ ] 4.5 可折叠 Steps / Terminal / Changed files 视图（Steps 已内联在转录中，Terminal / Changed files 未做）
 - [ ] 4.6 内核级 inline diff 审阅（fork 优势）
 
 ## 5. 改动审阅 (change-review)

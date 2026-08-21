@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Codon AI 面板 · 视觉稿 v1</title>
+<style>
+/* ===== VS Code Dark+ 近似 theme tokens ===== */
+:root {
+  --bg: #1e1e1e;            /* editor background */
+  --side: #252526;          /* sideBar background */
+  --widget: #252526;        /* editorWidget background */
+  --border: #3c3c3c;        /* panel border */
+  --fg: #cccccc;
+  --fg-dim: #9d9d9d;
+  --fg-faint: #6e6e6e;
+  --blue: #007acc;          /* button / accent */
+  --blue-hover: #1177bb;
+  --btn2: #3a3d41;          /* secondary button */
+  --btn2-hover: #45494e;
+  --input: #3c3c3c;
+  --badge: #4d4d4d;
+  --list-hover: #2a2d2e;
+  --list-active: #04395e;
+  --link: #3794ff;
+  --green: #4ec994;
+  --yellow: #cca700;
+  --red: #f14c4c;
+  --code-bg: #1a1a1a;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: #111; font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", sans-serif; color: var(--fg); }
+
+/* ===== 页面框架（mockup 外壳） ===== */
+.mock-bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: #000; color: #aaa; font-size: 13px; position: sticky; top: 0; z-index: 9; }
+.mock-bar .seg { display: inline-flex; border: 1px solid #444; border-radius: 6px; overflow: hidden; }
+.mock-bar .seg button { background: transparent; color: #aaa; border: none; padding: 5px 14px; cursor: pointer; font-size: 12px; }
+.mock-bar .seg button.on { background: var(--blue); color: #fff; }
+.mock-note { margin-left: auto; font-size: 12px; color: #666; }
+.stage { padding: 16px; display: flex; justify-content: center; }
+
+/* ===== 面板本体（模拟 webview 容器，固定宽高比） ===== */
+.panel { width: 920px; height: 620px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; display: flex; overflow: hidden; font-size: 13px; box-shadow: 0 8px 40px rgba(0,0,0,.5); }
+
+/* ===== 侧栏 ===== */
+#sidebar { width: 232px; background: var(--side); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+.sb-head { padding: 10px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--border); }
+.sb-title-row { display: flex; align-items: center; }
+.sb-title { font-weight: 600; font-size: 12px; flex: 1; opacity: .85; letter-spacing: .3px; }
+.btn-new { background: var(--blue); color: #fff; border: none; border-radius: 5px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+.btn-new:hover { background: var(--blue-hover); }
+.sb-search { display: flex; align-items: center; gap: 6px; background: var(--input); border: 1px solid transparent; border-radius: 5px; padding: 4px 8px; }
+.sb-search:focus-within { border-color: var(--link); }
+.sb-search svg { opacity: .55; flex: none; }
+.sb-search input { flex: 1; background: none; border: none; outline: none; color: var(--fg); font-size: 12px; }
+.sb-search input::placeholder { color: var(--fg-faint); }
+#sess-list { flex: 1; overflow: auto; padding: 6px 0; }
+.sess { position: relative; padding: 7px 10px 7px 14px; cursor: pointer; border-left: 2px solid transparent; }
+.sess:hover { background: var(--list-hover); }
+.sess.active { background: var(--list-active); border-left-color: var(--link); }
+.sess .l1 { display: flex; align-items: center; gap: 6px; }
+.sess .t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.sess.active .t { color: #fff; }
+.sess .l2 { display: flex; gap: 8px; margin-top: 2px; font-size: 11px; color: var(--fg-faint); }
+.sess .l2 .tok { color: var(--fg-dim); }
+.dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.dot.run { background: var(--green); animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(78,201,148,.5);} 50% { box-shadow: 0 0 0 4px rgba(78,201,148,0);} }
+.sb-foot { border-top: 1px solid var(--border); padding: 6px 10px; }
+.sb-foot a { color: var(--fg-dim); font-size: 11.5px; text-decoration: none; cursor: pointer; }
+.sb-foot a:hover { color: var(--fg); }
+
+/* ===== 主区 ===== */
+#main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+#topbar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--bg); }
+.gw { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; }
+.gw.off { background: var(--red); }
+#sess-title { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+.ctx-chip { display: inline-flex; align-items: center; gap: 5px; background: var(--badge); color: #ddd; border-radius: 10px; padding: 2px 9px; font-size: 11.5px; cursor: default; }
+.ctx-chip .bar { width: 34px; height: 4px; border-radius: 2px; background: #666; overflow: hidden; }
+.ctx-chip .bar i { display: block; height: 100%; background: var(--green); }
+.ctx-chip.warn .bar i { background: var(--yellow); }
+.ctx-chip.hot .bar i { background: var(--red); }
+.spacer { flex: 1; }
+.sel { background: var(--input); color: var(--fg); border: 1px solid #4a4a4a; border-radius: 5px; padding: 3px 6px; font-size: 12px; }
+.btn { border-radius: 5px; padding: 4px 10px; font-size: 12px; cursor: pointer; border: 1px solid transparent; }
+.btn.sec { background: var(--btn2); color: var(--fg); }
+.btn.sec:hover { background: var(--btn2-hover); }
+.btn.stop-run { background: #5a1d1d; color: #ffb3b3; border-color: #7a2c2c; }
+.btn.stop-dis { background: var(--btn2); color: var(--fg-faint); cursor: default; }
+
+#log { flex: 1; overflow: auto; padding: 14px; display: flex; flex-direction: column; gap: 9px; }
+
+/* ===== 空态 hero ===== */
+.hero { margin: auto; text-align: center; max-width: 460px; }
+.hero .logo { font-size: 30px; font-weight: 700; letter-spacing: 1px; }
+.hero .logo b { color: var(--link); }
+.hero .sub { color: var(--fg-dim); font-size: 13px; margin: 8px 0 22px; }
+.chips { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.chip-card { width: 138px; background: var(--widget); border: 1px solid var(--border); border-radius: 9px; padding: 12px 10px; cursor: pointer; text-align: left; transition: border-color .12s, transform .12s; }
+.chip-card:hover { border-color: var(--link); transform: translateY(-2px); }
+.chip-card .ic { font-size: 16px; }
+.chip-card .tt { font-size: 12.5px; margin-top: 6px; }
+.chip-card .ds { font-size: 11px; color: var(--fg-faint); margin-top: 3px; line-height: 1.4; }
+
+/* ===== 对话元素 ===== */
+.bubble { border-radius: 10px; padding: 8px 12px; max-width: 88%; line-height: 1.5; white-space: pre-wrap; }
+.bubble.user { background: var(--blue); color: #fff; align-self: flex-end; }
+.bubble.asst { background: var(--widget); border: 1px solid var(--border); align-self: flex-start; padding: 10px 14px; }
+.bubble.asst code { background: var(--code-bg); padding: 1px 4px; border-radius: 3px; font-size: 12px; }
+.bubble.asst pre { background: var(--code-bg); padding: 8px 10px; border-radius: 6px; overflow-x: auto; margin: 6px 0 2px; }
+.bubble.asst pre code { background: none; padding: 0; white-space: pre; }
+.step { align-self: stretch; border: 1px solid var(--border); border-left: 3px solid var(--link); border-radius: 7px; padding: 6px 10px; background: var(--widget); }
+.step .h { font-weight: 600; font-size: 12px; opacity: .9; }
+.step .a { font-size: 11px; color: var(--fg-faint); margin-top: 2px; white-space: pre-wrap; }
+.pending { align-self: flex-start; color: var(--fg-dim); font-size: 12px; font-style: italic; display: flex; align-items: center; gap: 7px; }
+.spin { width: 12px; height: 12px; border: 2px solid #555; border-top-color: var(--link); border-radius: 50%; animation: rot .8s linear infinite; }
+@keyframes rot { to { transform: rotate(360deg); } }
+.approval { align-self: stretch; border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px; background: var(--widget); }
+.approval .hd { font-size: 12px; margin-bottom: 8px; color: var(--fg); }
+.approval .hd b { color: #e2c08d; }
+.approval button { border-radius: 5px; padding: 4px 12px; font-size: 12px; cursor: pointer; margin-right: 8px; border: 1px solid transparent; }
+.approval .al { background: var(--blue); color: #fff; }
+.approval .aw { background: var(--btn2); color: var(--fg); border-color: var(--link); }
+.approval .dn { background: var(--btn2); color: var(--fg); }
+.msgline { font-size: 11px; color: var(--fg-faint); }
+
+/* ===== 输入区 ===== */
+#input { border-top: 1px solid var(--border); background: var(--bg); padding: 10px 12px 8px; }
+.in-row { display: flex; gap: 8px; align-items: flex-end; }
+#ta { flex: 1; resize: none; border-radius: 8px; border: 1px solid #4a4a4a; background: var(--input); color: var(--fg); padding: 8px 10px; font: inherit; height: 38px; max-height: 132px; outline: none; }
+#ta:focus { border-color: var(--link); }
+#send { background: var(--blue); color: #fff; border: none; border-radius: 8px; padding: 9px 18px; font-size: 13px; cursor: pointer; height: 38px; }
+#send:hover { background: var(--blue-hover); }
+.in-status { display: flex; justify-content: space-between; margin-top: 5px; font-size: 11px; color: var(--fg-faint); }
+.in-status .k { color: var(--fg-dim); }
+</style>
+</head>
+<body>
+
+<div class="mock-bar">
+  <span style="color:#ddd;font-weight:600">Codon AI 面板 · 视觉稿 v1</span>
+  <span class="seg">
+    <button id="m-empty" class="on" onclick="show('empty')">空态（新会话）</button>
+    <button id="m-chat" onclick="show('chat')">对话中（运行态）</button>
+  </span>
+  <span class="mock-note">静态稿 · 非真实数据 · 确认后移植进扩展 webview</span>
+</div>
+
+<div class="stage">
+<div class="panel">
+
+  <!-- ========== 侧栏 ========== -->
+  <div id="sidebar">
+    <div class="sb-head">
+      <div class="sb-title-row">
+        <span class="sb-title">会话</span>
+        <button class="btn-new">＋ 新会话</button>
+      </div>
+      <label class="sb-search">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="#ccc" stroke-width="1.5"/><path d="M11 11l3.5 3.5" stroke="#ccc" stroke-width="1.5"/></svg>
+        <input placeholder="搜索会话…">
+      </label>
+    </div>
+    <div id="sess-list">
+      <div class="sess">
+        <div class="l1"><span class="dot run"></span><span class="t">给 dshClient 加重连与超时</span></div>
+        <div class="l2"><span>刚刚</span><span class="tok">12K ctx</span></div>
+      </div>
+      <div class="sess active">
+        <div class="l1"><span class="t">测试会话标题生成</span></div>
+        <div class="l2"><span>5 分钟前</span><span class="tok">81K ctx</span></div>
+      </div>
+      <div class="sess">
+        <div class="l1"><span class="t">重构 webview 渲染逻辑</span></div>
+        <div class="l2"><span>1 小时前</span><span class="tok">23K ctx</span></div>
+      </div>
+      <div class="sess">
+        <div class="l1"><span class="t">打包脚本 dsh-inject 修复</span></div>
+        <div class="l2"><span>3 小时前</span><span class="tok">9K ctx</span></div>
+      </div>
+      <div class="sess">
+        <div class="l1"><span class="t">你好</span></div>
+        <div class="l2"><span>昨天</span><span class="tok">2K ctx</span></div>
+      </div>
+    </div>
+    <div class="sb-foot"><a>显示全部（47）▸</a></div>
+  </div>
+
+  <!-- ========== 主区 ========== -->
+  <div id="main">
+    <div id="topbar">
+      <span class="gw" id="gw-dot" title="DSH 网关已连接"></span>
+      <span id="sess-title">测试会话标题生成</span>
+      <span class="ctx-chip warn" title="上下文占用 7.7%（81K / 1M tokens），超过阈值时提示开新会话">
+        <span>81K / 1M</span><span class="bar"><i style="width:38%"></i></span>
+      </span>
+      <span class="spacer"></span>
+      <select class="sel">
+        <optgroup label="DeepSeek"><option>DeepSeek-V4-Flash</option><option>DeepSeek-V4-Pro</option></optgroup>
+        <optgroup label="xiaomi"><option selected>MiMo-V2.5</option></optgroup>
+      </select>
+      <button class="btn stop-run" id="stop-btn">⏹ 停止</button>
+      <button class="btn sec">只读/编辑</button>
+    </div>
+
+    <!-- 空态 -->
+    <div id="log-empty" style="flex:1;display:flex">
+      <div class="hero">
+        <div class="logo"><b>Codon</b> AI</div>
+        <div class="sub">描述一个任务，我会调用工具并在右侧编辑器落地改动；<br>写文件等敏感操作会先向你申请授权。</div>
+        <div class="chips">
+          <div class="chip-card"><div class="ic">📖</div><div class="tt">介绍这个项目</div><div class="ds">梳理目录结构与核心模块</div></div>
+          <div class="chip-card"><div class="ic">✨</div><div class="tt">写一个新功能</div><div class="ds">从需求到代码一步到位</div></div>
+          <div class="chip-card"><div class="ic">🐛</div><div class="tt">修一个 bug</div><div class="ds">粘贴报错，我来定位</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 对话中 -->
+    <div id="log-chat" style="flex:1;display:none;overflow:auto;padding:14px;flex-direction:column;gap:9px">
+      <div class="bubble user">给 dshClient 加上断线重连</div>
+      <div class="bubble asst">好的，我先看一下当前的 WebSocket 处理逻辑。</div>
+      <div class="step">
+        <div class="h">▸ 读取文件 · src/dshClient.ts</div>
+        <div class="a">path: dsh-agent-extension/src/dshClient.ts</div>
+      </div>
+      <div class="bubble asst">当前实现在切换会话时会泄漏连接。我建议：
+
+- <code>connectEvents()</code> 先关闭旧连接
+- 断线后指数退避重连（500ms → 10s）
+- 增加 <code>dispose()</code> 清理资源</div>
+      <div class="approval">
+        <div class="hd">⚠ 请求执行：<b>write_file</b> — 写入 src/dshClient.ts（+42 −18）</div>
+        <button class="al">允许一次</button><button class="aw">始终允许</button><button class="dn">拒绝</button>
+      </div>
+      <div class="pending"><span class="spin"></span>思考中… 3s</div>
+    </div>
+
+    <!-- 输入区 -->
+    <div id="input">
+      <div class="in-row">
+        <textarea id="ta" placeholder="要做什么？"></textarea>
+        <button id="send">发送</button>
+      </div>
+      <div class="in-status">
+        <span class="k">上下文 81K / 1M tokens</span>
+        <span>Enter 发送 · Shift+Enter 换行</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script>
+function show(mode) {
+  const empty = mode === 'empty'
+  document.getElementById('log-empty').style.display = empty ? 'flex' : 'none'
+  document.getElementById('log-chat').style.display = empty ? 'none' : 'flex'
+  document.getElementById('m-empty').classList.toggle('on', empty)
+  document.getElementById('m-chat').classList.toggle('on', !empty)
+  document.getElementById('stop-btn').className = empty ? 'btn stop-dis' : 'btn stop-run'
+  document.getElementById('sess-title').textContent = empty ? '新会话' : '给 dshClient 加重连与超时'
+}
+// 输入框自动增高（稿内演示）
+const ta = document.getElementById('ta')
+ta.addEventListener('input', () => {
+  ta.style.height = '38px'
+  ta.style.height = Math.min(132, ta.scrollHeight) + 'px'
+})
+// 建议卡片点击回填
+document.querySelectorAll('.chip-card').forEach(c => {
+  c.onclick = () => { ta.value = c.querySelector('.tt').textContent; ta.focus() }
+})
+</script>
+</body>
+</html>

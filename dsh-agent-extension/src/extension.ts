@@ -18,7 +18,7 @@ async function readTree(uri: vscode.Uri, depth: number): Promise<any[]> {
   }
   const out: any[] = []
   for (const [name, type] of entries) {
-    if (name.startsWith('.') && (name === '.git' || name === 'node_modules' || name === '.dsh')) continue
+    if (name === '.git' || name === 'node_modules' || name === '.dsh' || name === '.DS_Store') continue
     const child: any = { name, type: type === vscode.FileType.Directory ? 'dir' : 'file', path: `${uri.fsPath}/${name}` }
     if (type === vscode.FileType.Directory) child.children = await readTree(uri.with({ path: child.path }), depth - 1)
     out.push(child)
@@ -28,14 +28,21 @@ async function readTree(uri: vscode.Uri, depth: number): Promise<any[]> {
 
 class DshViewProvider implements vscode.WebviewViewProvider {
   private client?: DshClient
+  private viewVisible = false
+  private autoAllow = new Set<string>()
   constructor(private readonly ext: vscode.ExtensionContext) {}
+
+  dispose() { this.client?.dispose() }
 
   async resolveWebviewView(view: vscode.WebviewView): Promise<void> {
     const webview = view.webview
+    this.viewVisible = view.visible
+    this.ext.subscriptions.push(view.onDidChangeVisibility(() => { this.viewVisible = view.visible }))
     webview.options = { enableScripts: true, localResourceRoots: [this.ext.extensionUri] }
     webview.html = this.html(webview, nonce())
     const base = vscode.workspace.getConfiguration('dshAgent').get<string>('gatewayBase') || 'http://127.0.0.1:3080'
     this.client = new DshClient(base)
+    this.client.onStatus((status) => this.post(webview, { kind: 'gateway', status }))
     this.client.onFrame((rpcId, frame) => {
       this.post(webview, { kind: 'frame', rpcId, frame })
       if (frame.type === 'approval/requested') this.handleApproval(webview, rpcId, frame)
@@ -46,7 +53,17 @@ class DshViewProvider implements vscode.WebviewViewProvider {
         switch (msg.kind) {
           case 'ready': {
             const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || process.cwd()
-            const sessionId = await this.client!.createSession(cwd)
+            // 优先恢复已有会话，避免 webview 每次重建都新建 session
+            let sessionId: string | undefined = typeof msg.sessionId === 'string' ? msg.sessionId : undefined
+            let resumable = false
+            if (sessionId) {
+              try {
+                const sessions = (await this.client!.listSessions()).items || []
+                resumable = sessions.some((s) => s.sessionId === sessionId)
+              } catch { /* 网关不可达时回退新建 */ }
+            }
+            if (sessionId && resumable) this.client!.attachSession(sessionId)
+            else sessionId = await this.client!.createSession(cwd)
             const models: ModelsView = await this.client!.listModels()
             const tree = vscode.workspace.workspaceFolders
               ? await readTree(vscode.workspace.workspaceFolders[0].uri, 3)
@@ -55,7 +72,7 @@ class DshViewProvider implements vscode.WebviewViewProvider {
             let sessions: any[] = []
             try { workspaces = (await this.client!.listWorkspaces()).items || [] } catch {}
             try { sessions = (await this.client!.listSessions()).items || [] } catch {}
-            this.post(webview, { kind: 'init', sessionId, models, tree, workspaces, sessions })
+            this.post(webview, { kind: 'init', sessionId, fresh: !resumable, models, tree, workspaces, sessions })
             break
           }
           case 'loadWorkspaces': {
@@ -78,6 +95,15 @@ class DshViewProvider implements vscode.WebviewViewProvider {
           case 'prompt':
             await this.client!.sendPrompt(msg.text)
             break
+          case 'stop':
+            await this.client!.stopTurn()
+            break
+          case 'newSession': {
+            const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || process.cwd()
+            const sid = await this.client!.createSession(cwd)
+            this.post(webview, { kind: 'sessionSwitched', sessionId: sid })
+            break
+          }
           case 'selectModel':
             await this.client!.selectModel(msg.provider, msg.model, msg.reasoningEffort)
             break
@@ -90,6 +116,9 @@ class DshViewProvider implements vscode.WebviewViewProvider {
             break
           case 'respond':
             await this.answer(webview, msg.approvalId, msg.outcome)
+            break
+          case 'respondAlways':
+            await this.answerAlways(webview, msg.approvalId)
             break
           case 'answer':
             try {
@@ -105,7 +134,7 @@ class DshViewProvider implements vscode.WebviewViewProvider {
     })
   }
 
-  private approvals = new Map<string, { rpcId: string; sessionId: string }>()
+  private approvals = new Map<string, { rpcId: string; sessionId: string; toolName: string }>()
   private readonlyUris = new Set<string>()
 
   async openFileReadOnly(path: string) {
@@ -130,16 +159,36 @@ class DshViewProvider implements vscode.WebviewViewProvider {
 
   private async handleApproval(webview: vscode.Webview, rpcId: string, frame: any) {
     const { sessionId, approvalId, toolName, reason } = frame
-    this.approvals.set(approvalId, { rpcId, sessionId })
+    if (this.autoAllow.has(toolName)) {
+      try {
+        await this.client!.respond(rpcId, { sessionId, approvalId, outcome: 'allowed-once' })
+        this.post(webview, { kind: 'autoApproved', toolName })
+      } catch (e: any) {
+        this.post(webview, { kind: 'error', message: '自动放行失败: ' + String(e?.message ?? e) })
+      }
+      return
+    }
+    this.approvals.set(approvalId, { rpcId, sessionId, toolName })
     this.post(webview, { kind: 'approval', approvalId, toolName, reason })
-    const pick = await vscode.window.showInformationMessage(
-      `DSH 请求执行工具：${toolName}${reason ? ' — ' + reason : ''}`,
-      { modal: false },
-      '允许一次',
-      '拒绝',
-    )
-    if (pick === '允许一次') await this.answer(webview, approvalId, 'allowed-once')
-    else if (pick === '拒绝') await this.answer(webview, approvalId, 'rejected')
+    // 面板内联卡片为主入口；仅在面板不可见时用通知兜底，避免双重审批
+    if (!this.viewVisible) {
+      const pick = await vscode.window.showInformationMessage(
+        `DSH 请求执行工具：${toolName}${reason ? ' — ' + reason : ''}`,
+        { modal: false },
+        '允许一次',
+        '拒绝',
+      )
+      if (pick === '允许一次') await this.answer(webview, approvalId, 'allowed-once')
+      else if (pick === '拒绝') await this.answer(webview, approvalId, 'rejected')
+    }
+  }
+
+  private async answerAlways(webview: vscode.Webview, approvalId: string) {
+    const a = this.approvals.get(approvalId)
+    if (!a) return
+    // DSH 侧尚无"始终允许"语义，这里在适配层记住该工具，后续自动放行
+    this.autoAllow.add(a.toolName)
+    await this.answer(webview, approvalId, 'allowed-once')
   }
 
   private async answer(webview: vscode.Webview, approvalId: string, outcome: string) {
@@ -157,34 +206,54 @@ class DshViewProvider implements vscode.WebviewViewProvider {
   private html(webview: vscode.Webview, n: string): string {
     const src = webview.asWebviewUri(vscode.Uri.joinPath(this.ext.extensionUri, 'webview', 'main.js'))
     return `<!doctype html><html><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${n}'; img-src data:;">
 <style>
 * { box-sizing: border-box; }
 body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; font-size: 13px; color: var(--vscode-foreground); }
 #app { display: flex; height: 100vh; }
-#sidebar { width: 220px; min-width: 180px; border-right: 1px solid var(--vscode-panel-border); background: var(--vscode-sideBar-background); display: flex; flex-direction: column; overflow: hidden; }
-#sidebar-header { padding: 10px; border-bottom: 1px solid var(--vscode-panel-border); display: flex; align-items: center; gap: 6px; }
-#sidebar-header .title { font-weight: 600; font-size: 12px; flex: 1; }
-#new-session { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 11px; }
+#sidebar { width: 232px; min-width: 200px; border-right: 1px solid var(--vscode-panel-border); background: var(--vscode-sideBar-background); display: flex; flex-direction: column; overflow: hidden; }
+#sidebar-header { padding: 10px; border-bottom: 1px solid var(--vscode-panel-border); display: flex; flex-direction: column; gap: 8px; }
+.sb-title-row { display: flex; align-items: center; }
+#sidebar-header .title { font-weight: 600; font-size: 12px; flex: 1; opacity: .85; letter-spacing: .3px; }
+#new-session { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; border-radius: 5px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
 #new-session:hover { background: var(--vscode-button-hoverBackground); }
-#ws-list { flex: 1; overflow: auto; padding: 4px 0; }
-.ws-group { margin-bottom: 2px; }
-.ws-name { padding: 4px 10px; font-size: 12px; font-weight: 600; opacity: .8; cursor: pointer; display: flex; align-items: center; gap: 4px; }
-.ws-name:hover { opacity: 1; }
-.ws-name .arrow { font-size: 10px; transition: transform .15s; }
-.ws-name.open .arrow { transform: rotate(90deg); }
-.ws-sessions { display: none; }
-.ws-sessions.open { display: block; }
-.sess-item { padding: 4px 10px 4px 24px; font-size: 12px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; justify-content: space-between; gap: 6px; }
-.sess-item:hover { background: var(--vscode-list-hoverBackground); }
-.sess-item.active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
-.sess-title { overflow: hidden; text-overflow: ellipsis; }
-.sess-time { opacity: .5; font-size: 11px; white-space: nowrap; }
+.sb-search { display: flex; align-items: center; gap: 6px; background: var(--vscode-input-background); border: 1px solid transparent; border-radius: 5px; padding: 4px 8px; }
+.sb-search:focus-within { border-color: var(--vscode-focusBorder); }
+.sb-search .ic { opacity: .55; font-size: 11px; flex: none; }
+.sb-search input { flex: 1; min-width: 0; background: none; border: none; outline: none; color: var(--vscode-input-foreground); font-size: 12px; }
+.sb-search input::placeholder { color: var(--vscode-input-placeholderForeground); }
+#ws-list { flex: 1; overflow: auto; padding: 6px 0; }
+.sess { position: relative; padding: 7px 10px 7px 12px; cursor: pointer; border-left: 2px solid transparent; }
+.sess:hover { background: var(--vscode-list-hoverBackground); }
+.sess.active { background: var(--vscode-list-activeSelectionBackground); border-left-color: var(--vscode-focusBorder); }
+.sess .l1 { display: flex; align-items: center; gap: 6px; }
+.sess .t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.sess.active .t { color: var(--vscode-list-activeSelectionForeground); }
+.sess .l2 { display: flex; gap: 8px; margin-top: 2px; font-size: 11px; opacity: .55; }
+.dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.dot.run { background: var(--vscode-testing-iconPassed, #4ec994); animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(78,201,148,.45); } 50% { box-shadow: 0 0 0 4px rgba(78,201,148,0); } }
+#sb-foot { border-top: 1px solid var(--vscode-panel-border); padding: 6px 10px; }
+#sb-foot a { opacity: .6; font-size: 11.5px; cursor: pointer; }
+#sb-foot a:hover { opacity: 1; }
 #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 #bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--vscode-panel-border); background: var(--vscode-editor-background); }
 #status { font-weight: 600; white-space: nowrap; }
 .model { flex: 0 1 auto; max-width: 240px; background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border: 1px solid var(--vscode-dropdown-border); border-radius: 6px; padding: 3px 6px; font-size: 12px; }
-.toolbtn { margin-left: auto; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: 1px solid var(--vscode-button-border, transparent); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
+.toolbtn { margin-left: 8px; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: 1px solid var(--vscode-button-border, transparent); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
 .toolbtn:hover { background: var(--vscode-button-secondaryHoverBackground); }
+.toolbtn:disabled { opacity: .4; cursor: default; }
+#stop { margin-left: auto; }
+#stop.stop-run { background: var(--vscode-inputValidation-errorBackground); color: #ffb3b3; border-color: var(--vscode-inputValidation-errorBorder, transparent); opacity: 1; }
+#status.warn { color: var(--vscode-errorForeground); }
+.gw { width: 8px; height: 8px; border-radius: 50%; background: var(--vscode-testing-iconPassed, #4ec994); flex: none; }
+.gw.wait { background: var(--vscode-editorWarning, #cca700); }
+.gw.off { background: var(--vscode-errorForeground); }
+.ctx-chip { display: inline-flex; align-items: center; gap: 5px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); border-radius: 10px; padding: 2px 9px; font-size: 11.5px; cursor: default; white-space: nowrap; }
+.ctx-chip .bar { width: 34px; height: 4px; border-radius: 2px; background: rgba(128,128,128,.4); overflow: hidden; }
+.ctx-chip .bar i { display: block; height: 100%; background: var(--vscode-testing-iconPassed, #4ec994); }
+.ctx-chip.warn .bar i { background: var(--vscode-editorWarning, #cca700); }
+.ctx-chip.hot .bar i { background: var(--vscode-errorForeground); }
 #log { flex: 1; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .bubble { border-radius: 10px; padding: 8px 11px; white-space: pre-wrap; max-width: 92%; line-height: 1.45; box-shadow: 0 1px 2px rgba(0,0,0,.18); }
 .user { background: var(--vscode-button-background); color: var(--vscode-button-foreground); align-self: flex-end; }
@@ -194,16 +263,25 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
 .assistant ul { margin: 4px 0; padding-left: 20px; }
 .assistant li { margin: 2px 0; }
 .assistant code { background: var(--vscode-textCodeBlock-background); padding: 1px 4px; border-radius: 3px; font-size: 12px; }
+.assistant pre { background: var(--vscode-textCodeBlock-background); padding: 8px; border-radius: 6px; overflow-x: auto; margin: 6px 0; }
+.assistant pre code { background: none; padding: 0; font-size: 12px; white-space: pre; }
 .assistant strong { font-weight: 600; }
 .reasoning { border-left: 2px solid var(--vscode-textLink-foreground); padding: 4px 0 4px 8px; margin: 2px 0; align-self: flex-start; max-width: 92%; font-size: 12px; }
 .reasoning.collapsed .reasoning-body { display: none; }
 .reasoning:not(.collapsed) .reasoning-toggle { margin-bottom: 4px; }
-.reasoning-toggle { cursor: pointer; opacity: .6; font-size: 12px; user-select: none; }
+.reasoning-toggle { cursor: pointer; opacity: .6; font-size: 12px; user-select: none; display: flex; align-items: center; gap: 6px; }
 .reasoning-toggle:hover { opacity: 1; }
+.reasoning-toggle .arrow { display: inline-block; transition: transform .15s; font-size: 10px; }
+.reasoning:not(.collapsed) .reasoning-toggle .arrow { transform: rotate(90deg); }
+.reasoning-toggle .hint { opacity: .55; font-size: 11px; font-style: normal; }
 .reasoning-body { opacity: .75; font-style: italic; white-space: pre-wrap; }
+.spin { width: 11px; height: 11px; border: 2px solid var(--vscode-panel-border); border-top-color: var(--vscode-textLink-foreground); border-radius: 50%; display: inline-block; animation: rot .8s linear infinite; flex: none; }
+@keyframes rot { to { transform: rotate(360deg); } }
+#effort[hidden] { display: none; }
 .step { align-self: stretch; border: 1px solid var(--vscode-panel-border); border-left: 3px solid var(--vscode-textLink-foreground); border-radius: 8px; padding: 6px 10px; margin: 2px 0; background: var(--vscode-editorWidget-background); }
 .step > .head { font-weight: 600; font-size: 12px; opacity: .9; }
 .msg { margin: 0; white-space: pre-wrap; opacity: .85; }
+.pending { align-self: flex-start; opacity: .7; font-size: 12px; font-style: italic; }
 .tool { opacity: .6; font-size: 11px; }
 .chip { display: inline-flex; align-items: center; gap: 4px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); border-radius: 12px; padding: 2px 10px; font-size: 12px; margin: 2px 4px 2px 0; cursor: pointer; }
 .chip:hover { opacity: .85; }
@@ -211,19 +289,36 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
 .approval .head { font-weight: 600; margin-bottom: 8px; }
 .approval button { margin-right: 8px; border-radius: 6px; padding: 4px 12px; cursor: pointer; border: 1px solid var(--vscode-button-border, transparent); font-size: 12px; }
 .approval .allow { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+.approval .always { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border-color: var(--vscode-focusBorder); }
 .approval .deny { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
-#input { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--vscode-panel-border); background: var(--vscode-editor-background); }
-#ta { flex: 1; resize: none; border-radius: 8px; border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); background: var(--vscode-input-background); color: var(--vscode-input-foreground); padding: 8px; font-family: inherit; font-size: 13px; }
-#ta:focus { outline: 1px solid var(--vscode-focusBorder); }
-#send { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; border-radius: 8px; padding: 0 16px; cursor: pointer; font-size: 13px; }
+#input { border-top: 1px solid var(--vscode-panel-border); background: var(--vscode-editor-background); padding: 10px 12px 8px; }
+.in-row { display: flex; gap: 8px; align-items: flex-end; }
+#ta { flex: 1; resize: none; border-radius: 8px; border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); background: var(--vscode-input-background); color: var(--vscode-input-foreground); padding: 8px 10px; font-family: inherit; font-size: 13px; min-height: 38px; max-height: 132px; outline: none; }
+#ta:focus { border-color: var(--vscode-focusBorder); }
+#send { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; border-radius: 8px; padding: 9px 18px; cursor: pointer; font-size: 13px; height: 38px; }
 #send:hover { background: var(--vscode-button-hoverBackground); }
+.in-status { display: flex; justify-content: space-between; margin-top: 5px; font-size: 11px; opacity: .55; }
+.hero { margin: auto; text-align: center; max-width: 460px; }
+.hero .logo { font-size: 30px; font-weight: 700; letter-spacing: 1px; }
+.hero .logo b { color: var(--vscode-textLink-foreground); }
+.hero .sub { opacity: .7; font-size: 13px; margin: 8px 0 22px; line-height: 1.6; }
+.hero-chips { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.chip-card { width: 138px; background: var(--vscode-editorWidget-background); border: 1px solid var(--vscode-panel-border); border-radius: 9px; padding: 12px 10px; cursor: pointer; text-align: left; transition: border-color .12s, transform .12s; }
+.chip-card:hover { border-color: var(--vscode-focusBorder); transform: translateY(-2px); }
+.chip-card .ic { font-size: 16px; }
+.chip-card .tt { font-size: 12.5px; margin-top: 6px; }
+.chip-card .ds { font-size: 11px; opacity: .55; margin-top: 3px; line-height: 1.4; }
 #split { width: 0; border-left: 1px solid var(--vscode-panel-border); }
 </style>
-</head><body><div id="app"><div id="sidebar"><div id="sidebar-header"><span class="title">工作区</span><button id="new-session">+ 新会话</button></div><div id="ws-list"></div></div><div id="main"><div id="bar">
+</head><body><div id="app"><div id="sidebar"><div id="sidebar-header"><div class="sb-title-row"><span class="title">会话</span><button id="new-session">＋ 新建</button></div><div class="sb-search"><span class="ic">🔍</span><input id="sess-filter" placeholder="搜索会话…"></div></div><div id="ws-list"></div><div id="sb-foot"><a id="show-all" hidden></a></div></div><div id="main"><div id="bar">
+<span id="gw-dot" class="gw wait" title="正在连接 DSH 网关"></span>
 <span id="status">AI 对话</span>
+<span id="ctx-chip" class="ctx-chip" hidden><span id="ctx-text"></span><span class="bar"><i id="ctx-bar"></i></span></span>
 <select id="model" class="model"></select>
+<select id="effort" class="model" hidden></select>
+<button id="stop" class="toolbtn" disabled>停止</button>
 <button id="edit" class="toolbtn">只读/编辑</button>
-</div><div id="log"></div><div id="input"><textarea id="ta" rows="3" placeholder="要做什么？  (Enter 发送 / Shift+Enter 换行)"></textarea></div></div></div>
+</div><div id="log"></div><div id="input"><div class="in-row"><textarea id="ta" rows="1" placeholder="要做什么？"></textarea><button id="send">发送</button></div><div class="in-status"><span id="in-ctx"></span><span>Enter 发送 · Shift+Enter 换行</span></div></div></div></div>
 <script nonce="${n}" src="${src}"></script></body></html>`
   }
 }
@@ -241,10 +336,15 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('dshAgent.toggleEdit', () => provider.toggleEdit()),
   )
+  context.subscriptions.push({ dispose: () => provider.dispose() })
 
   // AI-first: disable Welcome; show native Explorer on the left and dock the AI
   // panel into the secondary (right) sidebar so the project tree lives in Code's own Explorer.
-  vscode.workspace.getConfiguration('workbench').update('startupEditor', 'none', vscode.ConfigurationTarget.Global)
+  // 仅在用户未自行配置时写入，避免覆盖用户偏好（长期方案是 fork 侧启动布局补丁）。
+  const wb = vscode.workspace.getConfiguration('workbench')
+  if (wb.inspect('startupEditor')?.globalValue === undefined) {
+    wb.update('startupEditor', 'none', vscode.ConfigurationTarget.Global)
+  }
   vscode.commands.executeCommand('workbench.view.explorer').then(() => {
     vscode.commands.executeCommand('dshAgent.view.focus').then(() => {
       setTimeout(() => {

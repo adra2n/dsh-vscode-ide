@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "调试 DSH Agent 扩展",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/dsh-agent-extension"],
+      "outFiles": ["${workspaceFolder}/dsh-agent-extension/out/**/*.js"],
+      "preLaunchTask": "compile-dsh-agent"
+    }
+  ]
+}

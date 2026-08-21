@@ -1,0 +1,22 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "compile-dsh-agent",
+      "type": "npm",
+      "script": "compile",
+      "path": "dsh-agent-extension/",
+      "problemMatcher": "$tsc",
+      "group": "build"
+    },
+    {
+      "label": "watch-dsh-agent",
+      "type": "npm",
+      "script": "watch",
+      "path": "dsh-agent-extension/",
+      "problemMatcher": "$tsc-watch",
+      "isBackground": true,
+      "group": "build"
+    }
+  ]
+}
