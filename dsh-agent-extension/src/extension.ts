@@ -440,6 +440,12 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
 .chip-card .ic { font-size: 16px; }
 .chip-card .tt { font-size: 12.5px; margin-top: 6px; }
 .chip-card .ds { font-size: 11px; opacity: .55; margin-top: 3px; line-height: 1.4; }
+.downloading-msg { margin: 40px auto; text-align: center; animation: fadeIn .3s ease-in; }
+.downloading-icon { font-size: 48px; margin-bottom: 16px; animation: pulse 2s ease-in-out infinite; }
+.downloading-text { font-size: 16px; font-weight: 600; color: var(--vscode-foreground); margin-bottom: 8px; }
+.downloading-hint { font-size: 13px; opacity: .7; line-height: 1.5; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
 #split { width: 0; border-left: 1px solid var(--vscode-panel-border); }
 #settings-overlay { position: absolute; inset: 0; z-index: 100; background: rgba(0,0,0,.35); display: flex; justify-content: flex-end; }
 #settings-overlay[hidden] { display: none; }

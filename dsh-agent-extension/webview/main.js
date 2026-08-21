@@ -717,9 +717,22 @@ window.addEventListener('message', (e) => {
     } else if (m.status === 'downloading') {
       statusEl.textContent = '⏳ DSH 正在下载中，请稍候...'
       statusEl.classList.add('warn')
+      // 在对话区域显示下载提示
+      if (!document.getElementById('dsh-downloading-msg')) {
+        ensureHero()
+        const msg = document.createElement('div')
+        msg.id = 'dsh-downloading-msg'
+        msg.className = 'downloading-msg'
+        msg.innerHTML = '<div class="downloading-icon">⏳</div><div class="downloading-text">DSH 运行时正在下载中...</div><div class="downloading-hint">首次启动需要下载 DSH 网关，请耐心等待</div>'
+        const hero = document.querySelector('.hero')
+        if (hero) hero.appendChild(msg)
+      }
     } else if (m.status === 'open') {
       statusEl.textContent = statusTitle
       statusEl.classList.remove('warn')
+      // 移除下载提示
+      const dlMsg = document.getElementById('dsh-downloading-msg')
+      if (dlMsg) dlMsg.remove()
     }
   } else if (m.kind === 'autoApproved') {
     appendLine('✓ 已按「始终允许」放行：' + m.toolName, 'tool')
