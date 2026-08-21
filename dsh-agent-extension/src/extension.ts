@@ -226,9 +226,9 @@ class DshViewProvider implements vscode.WebviewViewProvider {
     }
     // npx 方式（首次需联网下载，后续走缓存）
     try {
-      const npm = execFileSync('which', ['npm'], { encoding: 'utf8', timeout: 3000 }).trim()
-      if (npm) return { cmd: npm, args: ['exec', '@deepseek-ai/dsh@0.1.0-rc.7', 'web'] }
-    } catch { /* 无 npm */ }
+      const npx = execFileSync('which', ['npx'], { encoding: 'utf8', timeout: 3000 }).trim()
+      if (npx) return { cmd: npx, args: ['@deepseek-ai/dsh', 'web'] }
+    } catch { /* 无 npx */ }
     return undefined
   }
 
