@@ -175,6 +175,32 @@ export class DshClient {
     return this.rpc('session.rename', { sessionId, title })
   }
 
+  // ---- 模型配置（Settings → Models，见 tasks P3.1）----
+
+  /** settings.describe：全部命名空间的 schema+value（客户端自行过滤 ns）。 */
+  async describeSettings(): Promise<{ namespaces: { ns: string; value?: any; schema?: any }[] }> {
+    return this.rpc('settings.describe', {})
+  }
+
+  /** settings.mutate：路径级 set/unset 操作（op ∈ 'set'|'unset'，path 为段数组）。 */
+  async mutateSettings(ns: string, ops: { op: 'set' | 'unset'; path: string[]; value?: any }[]) {
+    return this.rpc('settings.mutate', { ns, ops })
+  }
+
+  /** credentials.set：按环境变量名风格的 ref 存密钥（不落明文配置）。 */
+  async setCredential(ref: string, value: string) {
+    return this.rpc('credentials.set', { ref, value })
+  }
+
+  async unsetCredential(ref: string) {
+    return this.rpc('credentials.unset', { ref })
+  }
+
+  /** credentials.describe：查询各 ref 的配置状态（configured/writable），不回传密钥。 */
+  async describeCredentials(refs: string[]): Promise<{ credentials: Record<string, { configured: boolean; writable: boolean }> }> {
+    return this.rpc('credentials.describe', { refs })
+  }
+
   async listWorkspaces() {
     return this.rpc<{ items: { workspaceId: string; path: string; title: string; sessionIds: string[] }[] }>(
       'workspace.list',

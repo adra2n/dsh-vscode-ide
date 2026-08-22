@@ -4,6 +4,7 @@ import { DshClient } from './dshClient'
 import { ApprovalManager } from './approvals'
 import { ChangeTracker, GitHeadContentProvider } from './changes'
 import { GatewayManager } from './gateway'
+import { ModelsManager } from './models'
 import type { PostToWebview, WebviewToExt } from './messages'
 import { renderPage } from './webviewPage'
 import { EditorFiles, readTree } from './workspaceFiles'
@@ -18,6 +19,7 @@ class DshViewProvider implements vscode.WebviewViewProvider {
   private client?: DshClient
   private gateway?: GatewayManager
   private approval?: ApprovalManager
+  private modelsMgr?: ModelsManager
   private tracker: ChangeTracker
   private files = new EditorFiles()
   private viewVisible = false
@@ -70,6 +72,7 @@ class DshViewProvider implements vscode.WebviewViewProvider {
       isViewVisible: () => this.viewVisible,
     })
     this.approval.setAutoAllow(cfg<string[]>('autoAllowTools') || [])
+    this.modelsMgr = new ModelsManager(() => this.client!)
     this.client = new DshClient(base)
     this.bindClient(webview)
 
@@ -158,6 +161,38 @@ class DshViewProvider implements vscode.WebviewViewProvider {
               await this.client!.respond(msg.rpcId, { selected: msg.response })
             } catch (e: any) {
               this.post(webview, { kind: 'error', message: '回答失败: ' + String(e?.message ?? e) })
+            }
+            break
+          case 'listModelProviders': {
+            try {
+              const providers = await this.modelsMgr!.list()
+              this.post(webview, { kind: 'modelProviders', providers })
+            } catch (e: any) {
+              this.post(webview, { kind: 'error', message: '读取模型配置失败: ' + String(e?.message ?? e) })
+            }
+            break
+          }
+          case 'addModelProvider':
+            await this.modelsMgr!.add({
+              id: msg.id,
+              baseURL: msg.baseURL,
+              apiKey: msg.apiKey,
+              modelId: msg.modelId,
+              modelName: msg.modelName,
+              contextWindow: msg.contextWindow,
+              maxTokens: msg.maxTokens,
+            })
+            this.post(webview, { kind: 'modelProviderAdded' })
+            {
+              const providers = await this.modelsMgr!.list()
+              this.post(webview, { kind: 'modelProviders', providers })
+            }
+            break
+          case 'removeModelProvider':
+            await this.modelsMgr!.remove(msg.id)
+            {
+              const providers = await this.modelsMgr!.list()
+              this.post(webview, { kind: 'modelProviders', providers })
             }
             break
           case 'getSettings':

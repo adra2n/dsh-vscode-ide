@@ -154,6 +154,18 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
 .tool-toggle { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 12px; cursor: pointer; }
 .tool-toggle input[type="checkbox"] { margin: 0; }
 .settings-footer { padding: 10px 12px; border-top: 1px solid var(--vscode-panel-border); display: flex; justify-content: flex-end; gap: 8px; }
+#provider-form { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+#provider-form label { font-size: 11px; opacity: .65; margin-top: 6px; }
+#provider-form input[type="text"], #provider-form input[type="password"] { width: 100%; padding: 5px 8px; font-size: 12px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); border-radius: 4px; outline: none; box-sizing: border-box; }
+#provider-form input:focus { border-color: var(--vscode-focusBorder); }
+#np-add { margin-top: 10px; align-self: flex-start; }
+.prov { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--vscode-panel-border); border-radius: 6px; margin-bottom: 6px; font-size: 11.5px; }
+.prov .pid { font-weight: 600; }
+.prov .purl { opacity: .55; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.prov .pkey-ok { color: var(--vscode-testing-iconPassed, #4ec994); }
+.prov .pkey-miss { color: var(--vscode-editorWarning, #cca700); }
+.prov .prm { cursor: pointer; opacity: .5; flex: none; }
+.prov .prm:hover { opacity: 1; color: var(--vscode-errorForeground); }
 </style>
 </head><body><div id="app"><div id="sidebar"><div id="sidebar-header"><div class="sb-title-row"><span class="title">会话</span><button id="new-session">＋ 新建</button></div><div class="sb-search"><span class="ic">🔍</span><input id="sess-filter" placeholder="搜索会话…"></div></div><div id="ws-list"></div><div id="sb-foot"><a id="show-all" hidden></a></div></div><div id="main"><div id="bar">
 <span id="gw-dot" class="gw wait" title="正在连接 DSH 网关"></span>
@@ -164,6 +176,6 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
 <button id="stop" class="toolbtn" disabled>停止</button>
 <button id="edit" class="toolbtn">只读/编辑</button>
 <button id="settings" class="toolbtn" title="设置">&#x2699;</button>
-</div><div id="settings-overlay" hidden><div id="settings-panel"><div class="settings-header"><span>设置</span><button id="settings-close" class="toolbtn">&times;</button></div><div class="settings-body"><section class="settings-section"><h3>连接</h3><label>网关地址</label><input id="cfg-gateway" type="text" /><label>网关启动命令（可选，留空自动探测）</label><input id="cfg-dshcmd" type="text" placeholder="如 /usr/local/bin/dsh" /></section><section class="settings-section"><h3>权限预设</h3><p class="settings-hint">以下工具将被自动放行，无需逐次确认</p><div id="cfg-tools-list"></div><p id="cfg-tools-empty" class="settings-hint">尚无工具记录。当 AI 请求执行工具时，可点击「始终允许」将其添加。</p></section></div><div class="settings-footer"><button id="settings-save" class="toolbtn">保存</button></div></div></div><div id="changes" hidden></div><div id="log"></div><div id="input"><div class="in-row"><textarea id="ta" rows="1" placeholder="要做什么？"></textarea><button id="send">发送</button></div><div class="in-status"><span id="in-ctx"></span><span>Enter 发送 · Shift+Enter 换行</span></div></div></div></div>
+</div><div id="settings-overlay" hidden><div id="settings-panel"><div class="settings-header"><span>设置</span><button id="settings-close" class="toolbtn">&times;</button></div><div class="settings-body"><section class="settings-section"><h3>连接</h3><label>网关地址</label><input id="cfg-gateway" type="text" /><label>网关启动命令（可选，留空自动探测）</label><input id="cfg-dshcmd" type="text" placeholder="如 /usr/local/bin/dsh" /></section><section class="settings-section"><h3>权限预设</h3><p class="settings-hint">以下工具将被自动放行，无需逐次确认</p><div id="cfg-tools-list"></div><p id="cfg-tools-empty" class="settings-hint">尚无工具记录。当 AI 请求执行工具时，可点击「始终允许」将其添加。</p></section><section class="settings-section"><h3>模型（自托管 / OpenAI 兼容）</h3><div id="cfg-providers-list"></div><p id="cfg-providers-empty" class="settings-hint">尚无自定义 provider。添加后可在对话顶部选择。</p><form id="provider-form"><label>名称（唯一 ID）</label><input id="np-id" type="text" placeholder="my-vllm" required /><label>Base URL（OpenAI 兼容）</label><input id="np-url" type="text" placeholder="http://127.0.0.1:8000/v1" required /><label>API Key</label><input id="np-key" type="password" placeholder="sk-…" required /><label>模型 ID</label><input id="np-model" type="text" placeholder="Qwen2.5-72B-Instruct" required /><button id="np-add" class="toolbtn" type="submit">＋ 添加 provider</button></form></section></div><div class="settings-footer"><button id="settings-save" class="toolbtn">保存</button></div></div></div><div id="changes" hidden></div><div id="log"></div><div id="input"><div class="in-row"><textarea id="ta" rows="1" placeholder="要做什么？"></textarea><button id="send">发送</button></div><div class="in-status"><span id="in-ctx"></span><span>Enter 发送 · Shift+Enter 换行</span></div></div></div></div>
 <script nonce="${nonceVal}" src="${src}"></script></body></html>`
 }

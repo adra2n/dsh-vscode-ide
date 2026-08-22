@@ -863,6 +863,8 @@ window.addEventListener('message', (e) => {
       changedFiles = m.files || []
       renderChanged()
     }
+  } else if (m.kind === 'modelProviders') {
+    renderModelProviders(m.providers || [])
   } else if (m.kind === 'gateway') {
     if (gwDot) {
       gwDot.classList.toggle('wait', m.status === 'connecting' || m.status === 'downloading')
@@ -994,8 +996,65 @@ ta.addEventListener('keydown', (e) => {
   else if (e.key === 'Enter' && e.shiftKey) { /* newline */ }
 })
 
+// ---- 设置面板 · 自定义模型 provider（P3.1）----
+const provList = document.getElementById('cfg-providers-list')
+const provEmpty = document.getElementById('cfg-providers-empty')
+const provForm = document.getElementById('provider-form')
+
+function renderModelProviders(providers) {
+  if (!provList) return
+  provList.innerHTML = ''
+  if (provEmpty) provEmpty.hidden = providers.length > 0
+  for (const p of providers || []) {
+    const row = document.createElement('div')
+    row.className = 'prov'
+    const id = document.createElement('span')
+    id.className = 'pid'
+    id.textContent = p.id
+    const url = document.createElement('span')
+    url.className = 'purl'
+    url.textContent = p.baseURL + ' · ' + (p.models || []).map(x => x.id).join(', ')
+    url.title = p.baseURL
+    const key = document.createElement('span')
+    key.className = p.credentialConfigured ? 'pkey-ok' : 'pkey-miss'
+    key.textContent = p.credentialConfigured ? '🔑' : '🔑?'
+    key.title = p.credentialConfigured ? 'API Key 已配置' : 'API Key 未配置'
+    const rm = document.createElement('span')
+    rm.className = 'prm'
+    rm.textContent = '✕'
+    rm.title = '删除此 provider'
+    rm.onclick = () => vscode.postMessage({ kind: 'removeModelProvider', id: p.id })
+    row.appendChild(id)
+    row.appendChild(url)
+    row.appendChild(key)
+    row.appendChild(rm)
+    provList.appendChild(row)
+  }
+}
+
+if (provForm) {
+  provForm.onsubmit = (e) => {
+    e.preventDefault()
+    const get = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : '' }
+    const id = get('np-id')
+    if (!id) return
+    vscode.postMessage({
+      kind: 'addModelProvider',
+      id,
+      baseURL: get('np-url'),
+      apiKey: get('np-key'),
+      modelId: get('np-model'),
+    })
+    for (const f of ['np-id', 'np-url', 'np-key', 'np-model']) {
+      const el = document.getElementById(f)
+      if (el) el.value = ''
+    }
+  }
+}
+
 function openSettings() {
   vscode.postMessage({ kind: 'getSettings' })
+  vscode.postMessage({ kind: 'listModelProviders' })
   if (settingsOverlay) settingsOverlay.hidden = false
 }
 function closeSettings() {

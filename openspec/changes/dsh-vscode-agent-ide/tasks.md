@@ -73,7 +73,7 @@
 
 ### Phase 3 · 模型与权限体系（~2 周）
 
-- [ ] P3.1 Settings → Models：provider 清单 UI（base URL / model ID），Key 经 DSH `credentials.set` 存储（tasks 3.4 余项）
+- [x] P3.1 Settings → Models ✅：**写入协议真机验证通过**——`credentials.set {ref,value}`（ref 为环境变量名风格）+ `settings.mutate {ns:"llm-pi-ai", ops:[{op:"set",path:["providers",<id>],value}]}`；provider 级必填 `api`（wire protocol，源码确认取值 openai-completions / openai-responses / azure-openai-responses / anthropic-messages，位置在 provider 而非 model）。实现：设置面板「模型」section（列表含 Key 配置状态 🔑、删除；表单添加 id/baseURL/Key/模型 ID），ModelsManager 封装（add 失败回滚凭据），v1 固定 openai-completions。25 测试全绿 + 真机增删冒烟通过
 - [ ] P3.2 权限预设对接 DSH 权限模型："始终允许"从扩展侧 Map 迁移到 DSH 侧预设；定全局策略 vs 按任务粒度
 - [ ] P3.3 分发版禁用 `dsh-password-gate` 插件（tasks 3.5，vendor-dsh.sh 内清理 profile 与凭据目录）
 

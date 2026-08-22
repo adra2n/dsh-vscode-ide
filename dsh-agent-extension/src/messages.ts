@@ -1,4 +1,7 @@
 import type { GatewayStatus, ModelsView } from './dshClient'
+import type { CustomProviderInfo } from './models'
+
+export type { CustomProviderInfo }
 
 export interface TreeEntry {
   name: string
@@ -52,6 +55,18 @@ export type WebviewToExt =
   | { kind: 'openDiff'; path: string }
   | { kind: 'clearChangedFiles'; sessionId?: string }
   | { kind: 'renameSession'; sessionId: string; title: string }
+  | { kind: 'listModelProviders' }
+  | {
+      kind: 'addModelProvider'
+      id: string
+      baseURL: string
+      apiKey: string
+      modelId: string
+      modelName?: string
+      contextWindow?: number
+      maxTokens?: number
+    }
+  | { kind: 'removeModelProvider'; id: string }
 
 /** 改动文件条目（path 相对 workspace 根）。 */
 export interface ChangedFile {
@@ -85,5 +100,7 @@ export type ExtToWebview =
   | { kind: 'approval'; approvalId: string; toolName: string; reason?: string }
   | { kind: 'approvalResolved'; approvalId: string; outcome: string }
   | { kind: 'autoApproved'; toolName: string }
+  | { kind: 'modelProviders'; providers: CustomProviderInfo[] }
+  | { kind: 'modelProviderAdded' }
 
 export type PostToWebview = (msg: ExtToWebview) => void
