@@ -1,5 +1,13 @@
-export interface ModelSelection { provider: string; model: string; reasoningEffort?: string }
-export interface ModelGroup { id: string; name: string; models: { id: string; name: string }[] }
+export interface ModelSelection {
+  provider: string
+  model: string
+  reasoningEffort?: string
+}
+export interface ModelGroup {
+  id: string
+  name: string
+  models: { id: string; name: string }[]
+}
 export interface ModelsView {
   current: ModelSelection
   routable: boolean
@@ -23,15 +31,25 @@ export class DshClient {
   private reconnectTimer?: ReturnType<typeof setTimeout>
   private disposed = false
 
-  constructor(base: string) { this.base = base }
+  constructor(base: string) {
+    this.base = base
+  }
 
-  get currentSessionId(): string | undefined { return this.sessionId }
+  get currentSessionId(): string | undefined {
+    return this.sessionId
+  }
 
-  onFrame(cb: (rpcId: string, payload: any) => void) { this.listeners.push(cb) }
+  onFrame(cb: (rpcId: string, payload: any) => void) {
+    this.listeners.push(cb)
+  }
 
-  onStatus(cb: (status: GatewayStatus) => void) { this.statusListeners.push(cb) }
+  onStatus(cb: (status: GatewayStatus) => void) {
+    this.statusListeners.push(cb)
+  }
 
-  private emitStatus(status: GatewayStatus) { this.statusListeners.forEach((l) => l(status)) }
+  private emitStatus(status: GatewayStatus) {
+    this.statusListeners.forEach((l) => l(status))
+  }
 
   private async rpc<T = any>(method: string, payload: any): Promise<T> {
     const body = { type: 'client-request', rpcId: crypto.randomUUID(), method, payload }
@@ -48,9 +66,11 @@ export class DshClient {
       json = await res.json()
     } catch (e: any) {
       if (e?.name === 'AbortError') {
-        throw new Error(`${method} 超时（${RPC_TIMEOUT_MS / 1000}s）：请确认 DSH 网关正在运行（${this.base}）`)
+        throw new Error(`${method} 超时（${RPC_TIMEOUT_MS / 1000}s）：请确认 DSH 网关正在运行（${this.base}）`, {
+          cause: e,
+        })
       }
-      throw new Error(`无法连接 DSH 网关（${this.base}）：${e?.message ?? e}`)
+      throw new Error(`无法连接 DSH 网关（${this.base}）：${e?.message ?? e}`, { cause: e })
     } finally {
       clearTimeout(timer)
     }
@@ -73,7 +93,10 @@ export class DshClient {
 
   private connectEvents() {
     if (this.disposed) return
-    if (this.ws) { this.ws.close(); this.ws = undefined }
+    if (this.ws) {
+      this.ws.close()
+      this.ws = undefined
+    }
     const url = this.base.replace(/^http/, 'ws') + '/api/events.mux'
     const ws = new WebSocket(url)
     this.ws = ws
@@ -148,11 +171,16 @@ export class DshClient {
   }
 
   async listWorkspaces() {
-    return this.rpc<{ items: { workspaceId: string; path: string; title: string; sessionIds: string[] }[] }>('workspace.list', {})
+    return this.rpc<{ items: { workspaceId: string; path: string; title: string; sessionIds: string[] }[] }>(
+      'workspace.list',
+      {}
+    )
   }
 
   async listSessions() {
-    return this.rpc<{ items: { sessionId: string; updatedAt: number; running: boolean; cwd: string; projections?: any }[] }>('session.list', {})
+    return this.rpc<{
+      items: { sessionId: string; updatedAt: number; running: boolean; cwd: string; projections?: any }[]
+    }>('session.list', {})
   }
 
   async getSessionHistory(sessionId: string) {
@@ -166,8 +194,14 @@ export class DshClient {
 
   dispose() {
     this.disposed = true
-    if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = undefined }
-    if (this.ws) { this.ws.close(); this.ws = undefined }
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = undefined
+    }
+    if (this.ws) {
+      this.ws.close()
+      this.ws = undefined
+    }
     this.listeners = []
     this.statusListeners = []
   }

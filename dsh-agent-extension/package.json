@@ -4,24 +4,45 @@
   "description": "AI-first agent panel for Codon, backed by the DeepSeek Harness (DSH) gateway.",
   "version": "0.1.0",
   "publisher": "codon",
-  "engines": { "vscode": "^1.90.0" },
-  "categories": ["Other"],
-  "activationEvents": ["onStartupFinished", "onView:dshAgent.view"],
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:dshAgent.view"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "viewsContainers": {
       "activitybar": [
-        { "id": "dshAgent", "title": "AI", "icon": "media/ai.svg" }
+        {
+          "id": "dshAgent",
+          "title": "AI",
+          "icon": "media/ai.svg"
+        }
       ]
     },
     "views": {
       "dshAgent": [
-        { "type": "webview", "id": "dshAgent.view", "name": "AI 对话" }
+        {
+          "type": "webview",
+          "id": "dshAgent.view",
+          "name": "AI 对话"
+        }
       ]
     },
     "commands": [
-      { "command": "dshAgent.openFile", "title": "DSH: 打开文件（右分屏）" },
-      { "command": "dshAgent.toggleEdit", "title": "DSH: 切换当前文件只读/可编辑" }
+      {
+        "command": "dshAgent.openFile",
+        "title": "DSH: 打开文件（右分屏）"
+      },
+      {
+        "command": "dshAgent.toggleEdit",
+        "title": "DSH: 切换当前文件只读/可编辑"
+      }
     ],
     "configuration": {
       "title": "DSH Agent",
@@ -38,7 +59,9 @@
         },
         "dshAgent.autoAllowTools": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "自动放行的工具名列表，无需逐次确认。"
         }
@@ -48,11 +71,20 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
+    "test": "vitest run",
+    "lint": "eslint src",
+    "fmt": "prettier --write \"src/**/*.ts\"",
     "vscode:prepublish": "npm run compile"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.90.0",
-    "typescript": "^5.4.0"
+    "eslint": "^10.9.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.6",
+    "typescript": "^5.4.0",
+    "typescript-eslint": "^8.67.0",
+    "vitest": "^4.1.11"
   }
 }

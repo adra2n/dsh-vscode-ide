@@ -187,6 +187,44 @@ let cachedWorkspaces = []
 let cachedSessions = []
 let running = false
 let sessionHasContent = false
+
+// ---- 改动文件条（turn 期间落盘的文件，点击开 diff）----
+let changedFiles = []
+
+function renderChanged() {
+  const el = document.getElementById('changes')
+  if (!el) return
+  if (!changedFiles.length) { el.hidden = true; el.innerHTML = ''; return }
+  el.hidden = false
+  el.innerHTML = '<span class="lbl">改动 ' + changedFiles.length + '</span>'
+  const seen = new Set()
+  for (const f of changedFiles) {
+    if (seen.has(f.path)) continue
+    seen.add(f.path)
+    const chip = document.createElement('span')
+    chip.className = 'chg' + (f.status === 'deleted' ? ' chg-del' : '')
+    chip.title = f.status === 'deleted' ? f.path + '（已删除）' : f.path
+    const st = document.createElement('span')
+    st.className = 'st'
+    st.textContent = f.status === 'created' ? '＋' : f.status === 'deleted' ? '✕' : '±'
+    const p = document.createElement('span')
+    p.className = 'p'
+    p.textContent = f.path
+    chip.appendChild(st)
+    chip.appendChild(p)
+    if (f.status !== 'deleted') {
+      chip.onclick = () => vscode.postMessage({ kind: 'openDiff', path: f.path })
+    }
+    el.appendChild(chip)
+  }
+  const clr = document.createElement('button')
+  clr.id = 'chg-clear'
+  clr.className = 'toolbtn'
+  clr.textContent = '清除'
+  clr.title = '清空改动清单（不影响磁盘文件）'
+  clr.onclick = () => vscode.postMessage({ kind: 'clearChangedFiles' })
+  el.appendChild(clr)
+}
 let showAllExpanded = false
 
 function fmtTokens(n) {
@@ -686,6 +724,8 @@ window.addEventListener('message', (e) => {
     activeSessionId = m.sessionId
     vscode.setState({ sessionId: m.sessionId })
     setRunning(false)
+    changedFiles = Array.isArray(m.changed) ? m.changed : []
+    renderChanged()
     if (m.workspaces && m.sessions) renderSidebar(m.workspaces, m.sessions)
     // 新建会话用空态 hero 引导；恢复的历史会话由后续 history 回放填充
     if (m.fresh) ensureHero()
@@ -704,8 +744,16 @@ window.addEventListener('message', (e) => {
     turnMessages.clear()
     chunkRenderedTexts.clear()
     setRunning(false)
+    changedFiles = []
+    renderChanged()
     ensureHero()
     vscode.postMessage({ kind: 'loadWorkspaces' })
+  } else if (m.kind === 'changedFiles') {
+    // 仅接受当前会话或全局（无 sessionId）的改动推送
+    if (!m.sessionId || m.sessionId === activeSessionId) {
+      changedFiles = m.files || []
+      renderChanged()
+    }
   } else if (m.kind === 'gateway') {
     if (gwDot) {
       gwDot.classList.toggle('wait', m.status === 'connecting' || m.status === 'downloading')
