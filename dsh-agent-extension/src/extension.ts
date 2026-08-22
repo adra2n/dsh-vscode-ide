@@ -5,6 +5,7 @@ import { ApprovalManager } from './approvals'
 import { ChangeTracker, GitHeadContentProvider } from './changes'
 import { GatewayManager } from './gateway'
 import { ModelsManager } from './models'
+import { PermissionManager } from './permissions'
 import type { PostToWebview, WebviewToExt } from './messages'
 import { renderPage } from './webviewPage'
 import { EditorFiles, readTree } from './workspaceFiles'
@@ -20,6 +21,7 @@ class DshViewProvider implements vscode.WebviewViewProvider {
   private gateway?: GatewayManager
   private approval?: ApprovalManager
   private modelsMgr?: ModelsManager
+  private permMgr?: PermissionManager
   private tracker: ChangeTracker
   private files = new EditorFiles()
   private viewVisible = false
@@ -73,6 +75,7 @@ class DshViewProvider implements vscode.WebviewViewProvider {
     })
     this.approval.setAutoAllow(cfg<string[]>('autoAllowTools') || [])
     this.modelsMgr = new ModelsManager(() => this.client!)
+    this.permMgr = new PermissionManager(() => this.client!)
     this.client = new DshClient(base)
     this.bindClient(webview)
 
@@ -195,15 +198,27 @@ class DshViewProvider implements vscode.WebviewViewProvider {
               this.post(webview, { kind: 'modelProviders', providers })
             }
             break
-          case 'getSettings':
+          case 'setPermissionPreset':
+            await this.permMgr!.setDefault(msg.preset)
+            break
+          case 'getSettings': {
+            let perm: { current?: string; options: string[] } = { options: [] }
+            try {
+              perm = await this.permMgr!.describe()
+            } catch {
+              /* 网关不可达时下拉为空 */
+            }
             this.post(webview, {
               kind: 'settings',
               gatewayBase: cfg<string>('gatewayBase') || DEFAULT_BASE,
               dshCommand: cfg<string>('gatewayCommand') || '',
               autoAllowTools: this.approval!.getAutoAllow(),
               knownTools: Array.from(this.approval!.knownTools),
+              permissionPreset: perm.current,
+              permissionOptions: perm.options,
             })
             break
+          }
           case 'saveSettings': {
             const c = vscode.workspace.getConfiguration('dshAgent')
             const newBase = (msg.gatewayBase || DEFAULT_BASE).trim()
@@ -218,7 +233,7 @@ class DshViewProvider implements vscode.WebviewViewProvider {
           }
         }
       } catch (e: any) {
-        this.post(webview, { kind: 'error', message: String(e?.message ?? e) })
+        this.post(webview, { kind: 'error', message: this.humanizeError(String(e?.message ?? e)) })
       }
     })
   }
@@ -321,6 +336,18 @@ class DshViewProvider implements vscode.WebviewViewProvider {
 
   private post(webview: vscode.Webview, msg: Parameters<PostToWebview>[0]) {
     void webview.postMessage(msg)
+  }
+
+  /** 已知故障的可用性翻译：password-gate 鉴权插件是分发版头号杀手（tasks 3.5）。 */
+  private humanizeError(message: string): string {
+    if (/unauthenticated/i.test(message)) {
+      return (
+        'DSH 网关要求登录（检测到 dsh-password-gate 鉴权插件）。' +
+        '请从 ~/.dsh/profiles/web/cordis.patch.yml 移除 dsh-password-gate 条目，' +
+        '并删除 ~/.dsh/login-plugin 目录后重启网关。'
+      )
+    }
+    return message
   }
 }
 

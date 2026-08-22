@@ -927,6 +927,18 @@ window.addEventListener('message', (e) => {
   } else if (m.kind === 'settings') {
     if (cfgGateway) cfgGateway.value = m.gatewayBase || ''
     if (cfgDshCmd) cfgDshCmd.value = m.dshCommand || ''
+    const permSel = document.getElementById('cfg-perm')
+    if (permSel) {
+      permSel.innerHTML = ''
+      for (const opt of m.permissionOptions || []) {
+        const o = document.createElement('option')
+        o.value = opt
+        o.textContent = opt
+        permSel.appendChild(o)
+      }
+      if (m.permissionPreset) permSel.value = m.permissionPreset
+      permSel.onchange = () => vscode.postMessage({ kind: 'setPermissionPreset', preset: permSel.value })
+    }
     if (cfgToolList) {
       cfgToolList.innerHTML = ''
       const allTools = new Set([...(m.knownTools || []), ...(m.autoAllowTools || [])])

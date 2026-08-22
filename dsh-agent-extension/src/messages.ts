@@ -55,6 +55,7 @@ export type WebviewToExt =
   | { kind: 'openDiff'; path: string }
   | { kind: 'clearChangedFiles'; sessionId?: string }
   | { kind: 'renameSession'; sessionId: string; title: string }
+  | { kind: 'setPermissionPreset'; preset: string }
   | { kind: 'listModelProviders' }
   | {
       kind: 'addModelProvider'
@@ -93,7 +94,15 @@ export type ExtToWebview =
   | { kind: 'history'; sessionId: string; events: unknown[] }
   | { kind: 'sessionSwitched'; sessionId: string }
   | { kind: 'error'; message: string }
-  | { kind: 'settings'; gatewayBase: string; dshCommand: string; autoAllowTools: string[]; knownTools: string[] }
+  | {
+      kind: 'settings'
+      gatewayBase: string
+      dshCommand: string
+      autoAllowTools: string[]
+      knownTools: string[]
+      permissionPreset?: string
+      permissionOptions?: string[]
+    }
   | { kind: 'settingsSaved' }
   | { kind: 'gateway'; status: GatewayUiStatus }
   | { kind: 'frame'; rpcId: string; frame: DshFrame }

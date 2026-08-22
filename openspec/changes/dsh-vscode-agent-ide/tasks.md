@@ -26,7 +26,7 @@
 - [x] 3.2 直连 `apiproxy` 网关（HTTP POST + WebSocket），client 已实现（含 RPC 超时、WS 断线指数退避重连、按 session 过滤帧、dispose）；SSE 兜底暂缺，重连已覆盖大部分场景
 - [x] 3.3 单一 session 管理（连续上下文）：webview 重建时恢复复用会话、侧栏切换、显式新建；待补：会话删除/重命名（DSH 无 session.delete RPC，需文件系统 + 网关重启）
 - [~] 3.4 设置：设置面板已实现（网关地址 / 启动命令 / 权限预设持久化，Global 配置）；模型自托管 Key（DSH credentials API）待接
-- [ ] 3.5 分发版**禁用 `dsh-password-gate`** 鉴权插件（见 1.5 坑），保证本机单人免登录
+- [x] 3.5 分发版**禁用 `dsh-password-gate`** 鉴权插件（见 1.5 坑），保证本机单人免登录 ✅（vendor 脚本防护 + 扩展侧 unauthenticated 指引，见 P3.3）
 
 ## 4. 编辑器内 agent 面板 (agent-conversation-panel)
 
@@ -74,8 +74,8 @@
 ### Phase 3 · 模型与权限体系（~2 周）
 
 - [x] P3.1 Settings → Models ✅：**写入协议真机验证通过**——`credentials.set {ref,value}`（ref 为环境变量名风格）+ `settings.mutate {ns:"llm-pi-ai", ops:[{op:"set",path:["providers",<id>],value}]}`；provider 级必填 `api`（wire protocol，源码确认取值 openai-completions / openai-responses / azure-openai-responses / anthropic-messages，位置在 provider 而非 model）。实现：设置面板「模型」section（列表含 Key 配置状态 🔑、删除；表单添加 id/baseURL/Key/模型 ID），ModelsManager 封装（add 失败回滚凭据），v1 固定 openai-completions。25 测试全绿 + 真机增删冒烟通过
-- [ ] P3.2 权限预设对接 DSH 权限模型："始终允许"从扩展侧 Map 迁移到 DSH 侧预设；定全局策略 vs 按任务粒度
-- [ ] P3.3 分发版禁用 `dsh-password-gate` 插件（tasks 3.5，vendor-dsh.sh 内清理 profile 与凭据目录）
+- [x] P3.2 权限预设对接 DSH 权限模型 ✅：**实测确认官方写入路径**——apiproxy 无权限专用 RPC，DSH web UI 自己也是 `settings.mutate {ns:"permission", ops:[{op:"set",path:["defaultPreset"]}]}`（源码 dsh-client-ui-permission-presets/client.js）；作用于新会话。真机验证：改 read-only → 新建会话投影 currentValue=read-only → 还原。实现：PermissionManager + 设置面板下拉（read-only / workspace-write / danger-full-access）；"始终允许"工具级白名单保留在扩展侧作为补充层
+- [x] P3.3 分发版禁用 `dsh-password-gate` 插件 ✅：补齐缺失的 scripts/vendor-dsh.sh（README 已引用但此前不存在；固定 DSH_VERSION=0.1.1-rc.2，装后校验 bin.js 存在），内建 password-gate 防护（装包后检测删除）；扩展侧 humanizeError 把 unauthenticated 翻译为可操作修复指引（tasks 3.5 一并完成）
 
 ### Phase 4 · 分发打包（~3 周，可与 Phase 2/3 并行启动）
 
