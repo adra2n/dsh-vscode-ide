@@ -49,3 +49,51 @@
 - [ ] 6.2 签名与公证（Mac 开发者证书 + notarize；Win 代码签名）
 - [ ] 6.3 Linux 打包（deb / rpm / AppImage）
 - [ ] 6.4 安装包内嵌或引导 DSH 运行时
+
+---
+
+## 后续路线图（2026-08 规划）
+
+> 前置：核心链路已可用（网关自动拉起 / 流式对话 / 会话 / 审批）。
+> 按五阶段推进；里程碑 M1 = 自用稳定版（Phase 2 完）、M2 = 可分发 Alpha（Phase 4 Mac 包）、M3 = 正式版（三平台 + inline diff）。
+
+### Phase 1 · 质量地基（~1 周，先行）✅ 2026-08-22 完成
+
+- [x] P1.1 协议层测试：vitest + FakeWebSocket，14 用例覆盖 RPC 信封、超时、连接错误、respond 信封、按 session 过滤、指数退避（500ms→10s cap）、stale socket 隔离、dispose 停止重连、session 方法 payload
+- [x] P1.2 拆分 extension.ts（539 行 → ~230 行编排层）：`gateway.ts`（生命周期）/ `approvals.ts`（审批）/ `workspaceFiles.ts`(文件树+只读) / `webviewPage.ts`(HTML) / `dshClient.ts`(协议，未动)
+- [x] P1.3 webview↔extension 消息协议类型化：`messages.ts` 定义 WebviewToExt / ExtToWebview / DshFrame 联合类型，与 main.js 实际 kind 已核对
+- [x] P1.4 eslint(flat config) + prettier + GitHub Actions CI（lint → compile → test）；顺带修复 rpc 错误缺 cause 的 lint 问题
+
+### Phase 2 · 核心体验闭环（~2 周，产品价值最高）
+
+- [x] P2.1 改动文件清单 + 原生 diff 审阅（tasks 5.1/5.2）✅：ChangeTracker（turn 期间 FS watcher + git 基线剔除既有脏文件，不依赖工具名 schema）；`codon-base` scheme 提供 HEAD 版本，点击改动条 chip → `vscode.diff` 右分屏；webview 顶部改动条（＋/±/✕ 状态、按会话记忆、清除按钮）；已删除文件展示 HEAD 内容。纯函数（parseGitStatus/extractPathHint）有单测
+- [ ] P2.2 Terminal 输出与工具调用结果的折叠视图（tasks 4.5 余项）
+- [ ] P2.3 停止/插话健壮性（tasks 4.4）：联调确认 `session.stop` 真实语义；停止后 UI 状态复位
+- [ ] P2.4 会话删除/重命名（tasks 3.3 尾巴）：文件系统方案封装为不闪断的 UX
+
+### Phase 3 · 模型与权限体系（~2 周）
+
+- [ ] P3.1 Settings → Models：provider 清单 UI（base URL / model ID），Key 经 DSH `credentials.set` 存储（tasks 3.4 余项）
+- [ ] P3.2 权限预设对接 DSH 权限模型："始终允许"从扩展侧 Map 迁移到 DSH 侧预设；定全局策略 vs 按任务粒度
+- [ ] P3.3 分发版禁用 `dsh-password-gate` 插件（tasks 3.5，vendor-dsh.sh 内清理 profile 与凭据目录）
+
+### Phase 4 · 分发打包（~3 周，可与 Phase 2/3 并行启动）
+
+- [ ] P4.1 VSCodium 基线构建跑通（tasks 2.4，nvm node 24.15.0，先裸构建再注入扩展）
+- [ ] P4.2 vendor-dsh.sh 进打包流水线；内置 vs 首次下载二选一（建议 Mac 内置）
+- [ ] P4.3 Mac 签名 + 公证先行 → Win 代码签名 → Linux deb/rpm/AppImage（tasks 6.1–6.3）
+- [ ] P4.4 品牌图标替换（.icns/.ico/.png，当前沿用 VSCodium 图标有合规风险）
+- [ ] P4.5 自动更新通道决策（自建 update API 或 v1 关闭自动更新）
+
+### Phase 5 · 差异化产品力（持续）
+
+- [ ] P5.1 内核级 inline diff 审阅（fork 终极形态，tasks 4.6）
+- [ ] P5.2 AI-first 主页打磨：首启向导（选模型/填 Key/选项目）、空状态引导模板
+- [ ] P5.3 VSCode 设置/扩展导入迁移路径
+- [ ] P5.4 上下文压力优化：接近阈值建议 compact/新会话
+
+### 关键风险对策
+
+- DSH dev preview API 漂移 → 固定版本 + 协议测试用录制帧，升级时重放对比
+- 单点 dshClient.ts 无测试 → P1.1 最优先
+- webview main.js 868 行裸 JS → 动它之前先拆模块补最小回归测试
