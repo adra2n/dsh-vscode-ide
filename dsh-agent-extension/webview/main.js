@@ -115,6 +115,80 @@ let curAssistant = null
 let curStep = null
 let curReasoning = null
 let turnMessages = new Map()
+const toolCards = new Map()
+
+// ---- 工具调用折叠卡片（tool/call + tool/result；bash 输出即 Terminal 视图）----
+function argSummary(argsRaw) {
+  let o = argsRaw
+  if (typeof argsRaw === 'string') {
+    try { o = JSON.parse(argsRaw) } catch { return argsRaw.slice(0, 120) }
+  }
+  if (o && typeof o === 'object') {
+    const parts = []
+    for (const k of ['command', 'path', 'file', 'file_path', 'pattern', 'url', 'query']) {
+      if (typeof o[k] === 'string' && o[k]) parts.push(o[k])
+    }
+    if (parts.length) return parts.join(' · ').slice(0, 120)
+    return Object.keys(o).slice(0, 4).join(', ')
+  }
+  return String(o ?? '').slice(0, 120)
+}
+
+function renderToolCall(ev) {
+  hidePending()
+  hideHero()
+  const d = ev.data || ev
+  const callId = d.callId || d.id || ''
+  const name = d.name || 'tool'
+  const el = document.createElement('div')
+  el.className = 'step toolcard collapsed'
+  const head = document.createElement('div')
+  head.className = 'head'
+  head.textContent = '▸ 🔧 ' + name + '  ' + argSummary(d.arguments)
+  head.onclick = () => {
+    el.classList.toggle('collapsed')
+    head.textContent = (el.classList.contains('collapsed') ? '▸' : '▾') + head.textContent.slice(1)
+  }
+  el.appendChild(head)
+  const pre = document.createElement('pre')
+  pre.className = 'tc-args'
+  let argsText = typeof d.arguments === 'string' ? d.arguments : JSON.stringify(d.arguments ?? {}, null, 2)
+  try { argsText = JSON.stringify(JSON.parse(argsText), null, 2) } catch { /* 原样展示 */ }
+  pre.textContent = argsText
+  el.appendChild(pre)
+  log.appendChild(el)
+  log.scrollTop = log.scrollHeight
+  if (callId) toolCards.set(callId, el)
+}
+
+function renderToolResult(ev) {
+  const d = ev.data || ev
+  const msg = d.message || {}
+  const callId = (msg.source && msg.source.callId) || ''
+  let text = ''
+  let isError = false
+  for (const c of msg.content || []) {
+    isError = isError || c.isError === true
+    for (const sub of c.content || []) {
+      if (sub.type === 'text') text += sub.text || ''
+      else text += JSON.stringify(sub)
+    }
+  }
+  const out = document.createElement('pre')
+  out.className = 'tc-result' + (isError ? ' tc-err' : '')
+  out.textContent = text || '(无输出)'
+  const host = (callId && toolCards.get(callId))
+  if (host) host.appendChild(out)
+  else {
+    const wrap = document.createElement('div')
+    wrap.className = 'step'
+    wrap.appendChild(out)
+    log.appendChild(wrap)
+  }
+  log.scrollTop = log.scrollHeight
+}
+
+function clearToolCards() { toolCards.clear() }
 // 去重：流式 chunk 已渲染过的文本，后续 assistant/message / inbox 回放不再重复渲染
 let chunkRenderedTexts = new Set()
 function normText(t) { return String(t || '').trim() }
@@ -179,6 +253,34 @@ function sessItem(s) {
   l2.innerHTML = parts.join('')
   item.appendChild(l1)
   item.appendChild(l2)
+  // ✎ 改名：hover 显示，点击后标题行变内联输入框
+  const ren = document.createElement('span')
+  ren.className = 'sess-rename'
+  ren.textContent = '✎'
+  ren.title = '重命名'
+  ren.onclick = (e) => {
+    e.stopPropagation()
+    const inp = document.createElement('input')
+    inp.className = 'sess-rename-input'
+    inp.value = title
+    t.replaceWith(inp)
+    inp.focus()
+    inp.select()
+    const commit = () => {
+      const v = inp.value.trim()
+      if (v && v !== title) vscode.postMessage({ kind: 'renameSession', sessionId: s.sessionId, title: v })
+      else renderSidebar(cachedWorkspaces, cachedSessions)
+    }
+    const cancel = () => renderSidebar(cachedWorkspaces, cachedSessions)
+    inp.onkeydown = (ke) => {
+      if (ke.key === 'Enter') commit()
+      else if (ke.key === 'Escape') cancel()
+      ke.stopPropagation()
+    }
+    inp.onblur = cancel
+    inp.onclick = (ie) => ie.stopPropagation()
+  }
+  l1.appendChild(ren)
   item.onclick = () => loadHistory(s.sessionId)
   return item
 }
@@ -337,6 +439,8 @@ function assistantBubble(text) {
 function renderHistoryEvent(ev) {
   if (!ev) return
   const t = ev.type
+  if (t === 'tool/call') { renderToolCall(ev); return }
+  if (t === 'tool/result') { renderToolResult(ev); return }
   if (t === 'agent/inbox/spliced') {
     const inserted = ev.data?.inserted || []
     for (const msg of inserted) {
@@ -594,7 +698,7 @@ function dispatchFrame(f) {
   const t = f.type
   if (t === 'session/subscribed') return
   if (t === 'agent/inbox/spliced') return handleInboxSpliced(f)
-  if (t === 'turn/start') { turnMessages.clear(); streamingBlocks = {}; chunkRenderedTexts.clear(); clearQuestions(); setRunning(true); return }
+  if (t === 'turn/start') { turnMessages.clear(); streamingBlocks = {}; chunkRenderedTexts.clear(); clearQuestions(); clearToolCards(); setRunning(true); return }
   if (t === 'turn/end') { setRunning(false); return handleTurnEnd(f) }
   if (t === 'session/title') return handleSessionTitle(f)
   if (t === 'session/projection') return renderProjection(f)
@@ -612,6 +716,10 @@ function dispatchFrame(f) {
       handleAssistantChunk(inner.data || inner)
     } else if (it === 'assistant/message') {
       renderAssistantMessage(inner.data?.message || inner.message)
+    } else if (it === 'tool/call') {
+      renderToolCall(inner)
+    } else if (it === 'tool/result') {
+      renderToolResult(inner)
     }
     return
   }
@@ -743,6 +851,7 @@ window.addEventListener('message', (e) => {
     streamingBlocks = {}
     turnMessages.clear()
     chunkRenderedTexts.clear()
+    clearToolCards()
     setRunning(false)
     changedFiles = []
     renderChanged()
@@ -797,6 +906,7 @@ window.addEventListener('message', (e) => {
     log.innerHTML = ''
     streamingBlocks = {}
     chunkRenderedTexts.clear()
+    clearToolCards()
     const evs = m.events || []
     sessionHasContent = evs.length > 0
     for (const ev of evs) renderHistoryEvent(ev)

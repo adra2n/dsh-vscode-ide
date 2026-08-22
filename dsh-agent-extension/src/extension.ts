@@ -116,11 +116,21 @@ class DshViewProvider implements vscode.WebviewViewProvider {
             this.client!.switchSession(msg.sessionId)
             this.post(webview, { kind: 'changedFiles', sessionId: msg.sessionId, files: this.tracker.get(msg.sessionId) })
             break
+          case 'renameSession': {
+            const title = msg.title.trim()
+            if (title) {
+              await this.client!.renameSession(msg.sessionId, title)
+              // 重命名后刷新侧栏缓存（title 在 projections 里）
+              const fresh = await this.listWorkspacesAndSessions()
+              this.post(webview, { kind: 'workspaces', ...fresh })
+            }
+            break
+          }
           case 'prompt':
             await this.client!.sendPrompt(msg.text)
             break
           case 'stop':
-            await this.client!.stopTurn()
+            await this.client!.cancelTurn()
             break
           case 'newSession': {
             const cwd = this.cwd()

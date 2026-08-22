@@ -37,6 +37,10 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
 .sess.active .t { color: var(--vscode-list-activeSelectionForeground); }
 .sess .l2 { display: flex; gap: 8px; margin-top: 2px; font-size: 11px; opacity: .55; }
 .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.sess-rename { opacity: 0; cursor: pointer; font-size: 11px; flex: none; padding: 0 2px; }
+.sess:hover .sess-rename { opacity: .55; }
+.sess-rename:hover { opacity: 1 !important; }
+.sess-rename-input { flex: 1; min-width: 0; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-focusBorder); border-radius: 4px; font-size: 12px; padding: 1px 5px; outline: none; }
 .dot.run { background: var(--vscode-testing-iconPassed, #4ec994); animation: pulse 1.4s ease-in-out infinite; }
 @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(78,201,148,.45); } 50% { box-shadow: 0 0 0 4px rgba(78,201,148,0); } }
 #sb-foot { border-top: 1px solid var(--vscode-panel-border); padding: 6px 10px; }
@@ -95,6 +99,12 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
 #effort[hidden] { display: none; }
 .step { align-self: stretch; border: 1px solid var(--vscode-panel-border); border-left: 3px solid var(--vscode-textLink-foreground); border-radius: 8px; padding: 6px 10px; margin: 2px 0; background: var(--vscode-editorWidget-background); }
 .step > .head { font-weight: 600; font-size: 12px; opacity: .9; }
+.toolcard .head { cursor: pointer; user-select: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.toolcard .head:hover { opacity: 1; color: var(--vscode-textLink-foreground); }
+.toolcard.collapsed .tc-args, .toolcard.collapsed .tc-result { display: none; }
+.tc-args, .tc-result { background: var(--vscode-textCodeBlock-background); border-radius: 6px; padding: 6px 8px; margin-top: 5px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; white-space: pre-wrap; word-break: break-all; max-height: 260px; overflow-y: auto; }
+.tc-result { border-left: 2px solid var(--vscode-panel-border); }
+.tc-err { border-left-color: var(--vscode-errorForeground); color: var(--vscode-errorForeground); }
 .msg { margin: 0; white-space: pre-wrap; opacity: .85; }
 .pending { align-self: flex-start; opacity: .7; font-size: 12px; font-style: italic; }
 .tool { opacity: .6; font-size: 11px; }

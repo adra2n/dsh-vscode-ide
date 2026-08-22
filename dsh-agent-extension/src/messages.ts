@@ -51,6 +51,7 @@ export type WebviewToExt =
   | { kind: 'saveSettings'; gatewayBase: string; dshCommand: string; autoAllowTools: string[] }
   | { kind: 'openDiff'; path: string }
   | { kind: 'clearChangedFiles'; sessionId?: string }
+  | { kind: 'renameSession'; sessionId: string; title: string }
 
 /** 改动文件条目（path 相对 workspace 根）。 */
 export interface ChangedFile {

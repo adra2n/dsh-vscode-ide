@@ -67,9 +67,9 @@
 ### Phase 2 · 核心体验闭环（~2 周，产品价值最高）
 
 - [x] P2.1 改动文件清单 + 原生 diff 审阅（tasks 5.1/5.2）✅：ChangeTracker（turn 期间 FS watcher + git 基线剔除既有脏文件，不依赖工具名 schema）；`codon-base` scheme 提供 HEAD 版本，点击改动条 chip → `vscode.diff` 右分屏；webview 顶部改动条（＋/±/✕ 状态、按会话记忆、清除按钮）；已删除文件展示 HEAD 内容。纯函数（parseGitStatus/extractPathHint）有单测
-- [ ] P2.2 Terminal 输出与工具调用结果的折叠视图（tasks 4.5 余项）
-- [ ] P2.3 停止/插话健壮性（tasks 4.4）：联调确认 `session.stop` 真实语义；停止后 UI 状态复位
-- [ ] P2.4 会话删除/重命名（tasks 3.3 尾巴）：文件系统方案封装为不闪断的 UX
+- [x] P2.2 Terminal 输出与工具调用结果的折叠视图 ✅：tool/call + tool/result 渲染为可折叠卡片（默认收起，头部显示工具名+参数摘要，展开看 args/result），bash 结果即 Terminal 视图，isError 红色标记；历史回放同构
+- [x] P2.3 停止/插话健壮性 ✅：**实测发现 `session.stop` 方法不存在**（网关返回纯文本 not found），真实方法为 **`session.cancel`**（返回 `{accepted:true}` 后优雅 step/end → turn/end）；已修 client 并补实测语义测试。插话经 mode:queue 已支持
+- [~] P2.4 会话删除/重命名：**rename 已完成**——`session.rename` 实测可用（返回 {title,seq} 并广播 session/title），侧栏 hover ✎ 内联改名 + 自动刷新列表；删除仍无 RPC，维持现状（收敛列表长度）
 
 ### Phase 3 · 模型与权限体系（~2 周）
 

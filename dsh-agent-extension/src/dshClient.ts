@@ -165,9 +165,14 @@ export class DshClient {
     })
   }
 
-  /** 中断当前运行中的 turn（DSH 侧方法名待联调确认，失败会由错误帧透出）。 */
-  async stopTurn() {
-    return this.rpc('session.stop', { sessionId: this.sessionId! })
+  /** 中断当前运行中的 turn（实测方法名为 session.cancel，返回 {accepted:true} 后网关发 step/end → turn/end）。 */
+  async cancelTurn() {
+    return this.rpc('session.cancel', { sessionId: this.sessionId! })
+  }
+
+  /** 重命名会话（session.rename，成功后广播 session/title 事件）。 */
+  async renameSession(sessionId: string, title: string) {
+    return this.rpc('session.rename', { sessionId, title })
   }
 
   async listWorkspaces() {

@@ -264,14 +264,24 @@ describe('DshClient session methods', () => {
     expect(body.payload).toEqual({ sessionId: 's1', mode: 'queue', content: [{ type: 'text', text: 'hello' }] })
   })
 
-  it('stopTurn calls session.stop', async () => {
-    const fetchMock = okFetch({})
+  it('cancelTurn calls session.cancel（实测方法名，session.stop 不存在）', async () => {
+    const fetchMock = okFetch({ accepted: true })
     vi.stubGlobal('fetch', fetchMock)
     const client = new DshClient('http://127.0.0.1:3080')
     client.attachSession('s1')
-    await client.stopTurn()
+    await client.cancelTurn()
     const body = JSON.parse(fetchMock.mock.calls[0][1].body)
-    expect(body.method).toBe('session.stop')
+    expect(body.method).toBe('session.cancel')
     expect(body.payload).toEqual({ sessionId: 's1' })
+  })
+
+  it('renameSession calls session.rename with title', async () => {
+    const fetchMock = okFetch({ title: '新名字', seq: 3 })
+    vi.stubGlobal('fetch', fetchMock)
+    const client = new DshClient('http://127.0.0.1:3080')
+    await client.renameSession('s1', '新名字')
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(body.method).toBe('session.rename')
+    expect(body.payload).toEqual({ sessionId: 's1', title: '新名字' })
   })
 })
