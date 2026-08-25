@@ -19,10 +19,17 @@ const ONBOARDING_KEY = 'zao.onboardingDone'
  */
 async function applyPureLayout(on: boolean) {
   const cfg = vscode.workspace.getConfiguration()
-  await cfg.update('activityBar.location', on ? 'hidden' : undefined, vscode.ConfigurationTarget.Global)
-  await cfg.update('workbench.activityBar.location', on ? 'hidden' : undefined, vscode.ConfigurationTarget.Global)
-  await cfg.update('workbench.statusBar.visible', on ? false : undefined, vscode.ConfigurationTarget.Global)
-  await cfg.update('breadcrumbs.enabled', on ? false : undefined, vscode.ConfigurationTarget.Global)
+  // 逐项容错：写未知键会抛 CodeExpectedError，不能让单项失败拖垮整个布局切换
+  const put = async (key: string, value: unknown) => {
+    try {
+      await cfg.update(key, value, vscode.ConfigurationTarget.Global)
+    } catch (e) {
+      console.log('[Zao] layout setting skipped:', key, String(e))
+    }
+  }
+  await put('workbench.activityBar.location', on ? 'hidden' : undefined)
+  await put('workbench.statusBar.visible', on ? false : undefined)
+  await put('breadcrumbs.enabled', on ? false : undefined)
   if (on) {
     await vscode.commands.executeCommand('workbench.action.closeSidebar').then(undefined, () => undefined)
   }
