@@ -37,15 +37,19 @@
     "commands": [
       {
         "command": "dshAgent.openFile",
-        "title": "DSH: 打开文件（右分屏）"
+        "title": "Zao: 打开文件（右分屏）"
       },
       {
         "command": "dshAgent.toggleEdit",
-        "title": "DSH: 切换当前文件只读/可编辑"
+        "title": "Zao: 切换当前文件只读/可编辑"
+      },
+      {
+        "command": "dshAgent.togglePureLayout",
+        "title": "Zao: 切换极简 AI 布局"
       }
     ],
     "configuration": {
-      "title": "DSH Agent",
+      "title": "Zao AI",
       "properties": {
         "dshAgent.gatewayBase": {
           "type": "string",
@@ -64,6 +68,11 @@
           },
           "default": [],
           "description": "自动放行的工具名列表，无需逐次确认。"
+        },
+        "dshAgent.pureAILayout": {
+          "type": "boolean",
+          "default": true,
+          "description": "极简 AI 布局：隐藏活动栏/状态栏/资源管理器，只保留 AI 对话（diff 按需打开）。"
         }
       }
     }

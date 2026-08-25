@@ -58,6 +58,7 @@ export type WebviewToExt =
   | { kind: 'clearChangedFiles'; sessionId?: string }
   | { kind: 'renameSession'; sessionId: string; title: string }
   | { kind: 'setPermissionPreset'; preset: string }
+  | { kind: 'setPureLayout'; on: boolean }
   | { kind: 'listModelProviders' }
   | { kind: 'getOnboarding' }
   | { kind: 'saveProviderKey'; providerId: string; key: string }
@@ -110,6 +111,7 @@ export type ExtToWebview =
       knownTools: string[]
       permissionPreset?: string
       permissionOptions?: string[]
+      pureLayout?: boolean
     }
   | { kind: 'settingsSaved' }
   | { kind: 'gateway'; status: GatewayUiStatus }

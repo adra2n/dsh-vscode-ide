@@ -13,6 +13,21 @@ import { EditorFiles, readTree } from './workspaceFiles'
 const DEFAULT_BASE = 'http://127.0.0.1:3080'
 const ONBOARDING_KEY = 'zao.onboardingDone'
 
+/**
+ * 极简 AI 布局：隐藏活动栏/状态栏/资源管理器，AI 面板占满左侧，
+ * 编辑器仅在打开 diff/文件时出现。关闭时恢复默认（undefined = 回退用户/出厂值）。
+ */
+async function applyPureLayout(on: boolean) {
+  const cfg = vscode.workspace.getConfiguration()
+  await cfg.update('activityBar.location', on ? 'hidden' : undefined, vscode.ConfigurationTarget.Global)
+  await cfg.update('workbench.activityBar.location', on ? 'hidden' : undefined, vscode.ConfigurationTarget.Global)
+  await cfg.update('workbench.statusBar.visible', on ? false : undefined, vscode.ConfigurationTarget.Global)
+  await cfg.update('breadcrumbs.enabled', on ? false : undefined, vscode.ConfigurationTarget.Global)
+  if (on) {
+    await vscode.commands.executeCommand('workbench.action.closeSidebar').then(undefined, () => undefined)
+  }
+}
+
 function cfg<T>(section: string): T | undefined {
   return vscode.workspace.getConfiguration('dshAgent').get<T>(section)
 }
@@ -86,7 +101,10 @@ class DshViewProvider implements vscode.WebviewViewProvider {
           const newBase = cfg<string>('gatewayBase') || DEFAULT_BASE
           void this.reconnectClient(webview, newBase)
         }
-      })
+        if (e.affectsConfiguration('dshAgent.pureAILayout')) {
+          void applyPureLayout(cfg<boolean>('pureAILayout') ?? true)
+        }
+      }),
     )
 
     webview.onDidReceiveMessage(async (raw) => {
@@ -232,6 +250,12 @@ class DshViewProvider implements vscode.WebviewViewProvider {
             }
             break
           }
+          case 'setPureLayout':
+            await vscode.workspace
+              .getConfiguration('dshAgent')
+              .update('pureAILayout', msg.on, vscode.ConfigurationTarget.Global)
+            await applyPureLayout(msg.on)
+            break
           case 'getSettings': {
             let perm: { current?: string; options: string[] } = { options: [] }
             try {
@@ -247,6 +271,7 @@ class DshViewProvider implements vscode.WebviewViewProvider {
               knownTools: Array.from(this.approval!.knownTools),
               permissionPreset: perm.current,
               permissionOptions: perm.options,
+              pureLayout: cfg<boolean>('pureAILayout') ?? true,
             })
             break
           }
@@ -387,7 +412,7 @@ class DshViewProvider implements vscode.WebviewViewProvider {
   }
 }
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.workspace.registerTextDocumentContentProvider(GitHeadContentProvider.scheme, new GitHeadContentProvider()),
   )
@@ -401,22 +426,44 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('dshAgent.openFile', (path: string) => provider.openFileReadOnly(path))
   )
   context.subscriptions.push(vscode.commands.registerCommand('dshAgent.toggleEdit', () => provider.toggleEdit()))
+  context.subscriptions.push(
+    vscode.commands.registerCommand('dshAgent.togglePureLayout', async () => {
+      const cfg = vscode.workspace.getConfiguration('dshAgent')
+      const next = !(cfg.get<boolean>('pureAILayout') ?? true)
+      await cfg.update('pureAILayout', next, vscode.ConfigurationTarget.Global)
+      await applyPureLayout(next)
+      void vscode.window.showInformationMessage(next ? 'Zao：已进入极简 AI 布局' : 'Zao：已恢复完整布局')
+    }),
+  )
   context.subscriptions.push({ dispose: () => provider.dispose() })
 
-  // AI-first: disable Welcome; show native Explorer on the left and dock the AI
-  // panel into the secondary (right) sidebar so the project tree lives in Code's own Explorer.
-  // 仅在用户未自行配置时写入，避免覆盖用户偏好（长期方案是 fork 侧启动布局补丁）。
+  // AI-first 布局：极简模式（默认）只留 AI 面板；完整模式保留 Explorer + AI 右侧栏。
+  // 仅在用户未自行配置 startupEditor 时写入，避免覆盖用户偏好。
+  const pure = cfg<boolean>('pureAILayout') ?? true
   const wb = vscode.workspace.getConfiguration('workbench')
   if (wb.inspect('startupEditor')?.globalValue === undefined) {
     wb.update('startupEditor', 'none', vscode.ConfigurationTarget.Global)
   }
-  vscode.commands.executeCommand('workbench.view.explorer').then(() => {
+  if (pure) {
+    await applyPureLayout(true)
     vscode.commands.executeCommand('dshAgent.view.focus').then(() => {
       setTimeout(() => {
-        vscode.commands.executeCommand('workbench.action.moveViewToSecondarySidebar').then(undefined, () => undefined)
+        // 主侧栏优先（占满左侧）；命令不可用时回退副侧栏
+        vscode.commands.executeCommand('workbench.action.moveViewToPrimarySidebar').then(
+          () => undefined,
+          () => vscode.commands.executeCommand('workbench.action.moveViewToSecondarySidebar').then(undefined, () => undefined),
+        )
       }, 300)
     }, undefined)
-  }, undefined)
+  } else {
+    vscode.commands.executeCommand('workbench.view.explorer').then(() => {
+      vscode.commands.executeCommand('dshAgent.view.focus').then(() => {
+        setTimeout(() => {
+          vscode.commands.executeCommand('workbench.action.moveViewToSecondarySidebar').then(undefined, () => undefined)
+        }, 300)
+      }, undefined)
+    }, undefined)
+  }
 }
 
 export function deactivate() {}

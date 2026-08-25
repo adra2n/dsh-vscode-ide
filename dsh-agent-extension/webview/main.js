@@ -984,6 +984,11 @@ window.addEventListener('message', (e) => {
     if (cfgGateway) cfgGateway.value = m.gatewayBase || ''
     if (cfgDshCmd) cfgDshCmd.value = m.dshCommand || ''
     const permSel = document.getElementById('cfg-perm')
+    const pureCb = document.getElementById('cfg-pure')
+    if (pureCb) {
+      pureCb.checked = m.pureLayout !== false
+      pureCb.onchange = () => vscode.postMessage({ kind: 'setPureLayout', on: pureCb.checked })
+    }
     if (permSel) {
       permSel.innerHTML = ''
       for (const opt of m.permissionOptions || []) {
