@@ -79,8 +79,8 @@
 
 ### Phase 4 · 分发打包（~3 周，可与 Phase 2/3 并行启动）
 
-- [ ] P4.1 VSCodium 基线构建跑通（tasks 2.4，nvm node 24.15.0，先裸构建再注入扩展）
-- [ ] P4.2 vendor-dsh.sh 进打包流水线；内置 vs 首次下载二选一（建议 Mac 内置）
+- [x] P4.1 VSCodium 基线构建跑通 ✅（此前已完成：vscode 源码 5.6G + node_modules + 首个 VSCode-darwin-x64；本轮 build_codon.sh 全流程重跑 ~45min 成功出包。注意：CLI 子构建需 rustup，未装则该步跳过但不影响 app 本体）
+- [x] P4.2 vendor-dsh.sh 进打包流水线 ✅：build_codon.sh 收尾自动执行（扩展编译产物拷入 app + vendor 运行时）；vendor 脚本增加 **npx 缓存快速路径**（同版本直接拷整棵依赖树 273M，秒级完成，绕开 registry 安装）。**真机冒烟通过**：Codon.app 启动 → 扩展自动拉起 vendored 网关 → RPC 正常。关键修复：Electron 内嵌 node 必须显式 `--expose-internals`（cordis-plugin-hmr 启动必需，系统 node 默认开启）
 - [ ] P4.3 Mac 签名 + 公证先行 → Win 代码签名 → Linux deb/rpm/AppImage（tasks 6.1–6.3）
 - [ ] P4.4 品牌图标替换（.icns/.ico/.png，当前沿用 VSCodium 图标有合规风险）
 - [ ] P4.5 自动更新通道决策（自建 update API 或 v1 关闭自动更新）

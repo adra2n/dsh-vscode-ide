@@ -51,7 +51,8 @@ export class GatewayManager {
       const parts = cfg.trim().split(/\s+/)
       return { cmd: parts[0], args: [...parts.slice(1), 'web'] }
     }
-    // 内置运行时：app/dsh-runtime 与 extensions/ 平级，用 Codon 自身二进制的 Node 模式拉起
+    // 内置运行时：app/dsh-runtime 与 extensions/ 平级，用 Codon 自身二进制的 Node 模式拉起。
+    // Electron 内嵌 node 需显式 --expose-internals（cordis-plugin-hmr 启动必需，系统 node 默认开启）。
     const bundledBin = path.join(
       this.opts.extensionPath,
       '..',
@@ -60,10 +61,10 @@ export class GatewayManager {
       '@deepseek-ai',
       'dsh',
       'lib',
-      'bin.js'
+      'bin.js',
     )
     if (fs.existsSync(bundledBin)) {
-      return { cmd: process.execPath, args: [bundledBin, 'web'], env: { ELECTRON_RUN_AS_NODE: '1' } }
+      return { cmd: process.execPath, args: ['--expose-internals', bundledBin, 'web'], env: { ELECTRON_RUN_AS_NODE: '1' } }
     }
     // npx 方式（首次需联网下载，后续走缓存）
     try {

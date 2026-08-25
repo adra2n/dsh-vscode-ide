@@ -106,12 +106,17 @@ code --extensionDevelopmentPath=dsh-agent-extension .
 
 ## 路线图
 
-- [ ] 本地 DSH 运行时分发（内置 / 首次下载 / 用户自带）
-- [ ] 设置面板（模型默认配置、权限预设）
-- [ ] 改动文件清单 + inline diff 审阅
-- [ ] 上下文注入（文件 / 选区 / 诊断 / git diff / 终端）
-- [ ] 跨平台构建流水线（Mac / Win / Linux）
-- [ ] 签名与公证
+- [x] 会话管理 / 模型选择 / 工具审批 / 思考过程 / 上下文压力
+- [x] 改动文件清单 + 原生 diff 审阅（git HEAD 基线）
+- [x] 工具调用折叠卡片（Terminal 输出视图）
+- [x] 会话重命名；停止 = `session.cancel`（实测修正）
+- [x] Settings → Models：自托管 OpenAI 兼容 provider，Key 走 DSH credentials 层不落明文
+- [x] 默认权限预设切换（read-only / workspace-write / danger-full-access）
+- [x] 本地 DSH 运行时分发（scripts/vendor-dsh.sh，含 password-gate 防护）
+- [ ] 内核级 inline diff 审阅（fork 优势，扩展版 diff 已就绪）
+- [ ] 设置面板增强（模型默认配置细化）
+- [ ] 跨平台构建流水线（Mac / Win / Linux）与签名公证
+- 详细任务跟踪见 `openspec/changes/dsh-vscode-agent-ide/tasks.md`
 
 ## License
 
