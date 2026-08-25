@@ -5,8 +5,8 @@ vi.mock('vscode', () => ({}))
 
 describe('credentialRef', () => {
   it('derives a stable env-style ref matching DSH regex ^[A-Za-z_][A-Za-z0-9_]*$', () => {
-    expect(credentialRef('my-vllm')).toBe('CODON_MY_VLLM_API_KEY')
-    expect(credentialRef('My.VLLM')).toBe('CODON_MY_VLLM_API_KEY')
+    expect(credentialRef('my-vllm')).toBe('ZAO_MY_VLLM_API_KEY')
+    expect(credentialRef('My.VLLM')).toBe('ZAO_MY_VLLM_API_KEY')
   })
 
   it('prefixes digit-leading ids to keep the ref valid', () => {
@@ -28,7 +28,7 @@ describe('buildProviderPatch', () => {
     expect(patch.apiKey).toBeUndefined()
     expect(patch.baseURL).toBe('http://127.0.0.1:8000/v1/')
     expect(patch.api).toBe('openai-completions')
-    expect(patch.apiKeyEnv).toBe('CODON_MY_VLLM_API_KEY')
+    expect(patch.apiKeyEnv).toBe('ZAO_MY_VLLM_API_KEY')
     expect(patch.models).toEqual([{ id: 'Qwen2.5-72B', name: 'Qwen2.5-72B' }])
   })
 

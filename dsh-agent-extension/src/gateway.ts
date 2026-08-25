@@ -44,14 +44,14 @@ export class GatewayManager {
     }
   }
 
-  /** 启动命令解析：gatewayCommand 设置 > 内置 dsh-runtime（Codon 二进制 Node 模式）> npx。 */
+  /** 启动命令解析：gatewayCommand 设置 > 内置 dsh-runtime（Zao 二进制 Node 模式）> npx。 */
   resolveCommand(): GatewaySpawnSpec | undefined {
     const cfg = this.opts.getConfig<string>('gatewayCommand')
     if (cfg && cfg.trim()) {
       const parts = cfg.trim().split(/\s+/)
       return { cmd: parts[0], args: [...parts.slice(1), 'web'] }
     }
-    // 内置运行时：app/dsh-runtime 与 extensions/ 平级，用 Codon 自身二进制的 Node 模式拉起。
+    // 内置运行时：app/dsh-runtime 与 extensions/ 平级，用 Zao 自身二进制的 Node 模式拉起。
     // Electron 内嵌 node 需显式 --expose-internals（cordis-plugin-hmr 启动必需，系统 node 默认开启）。
     const bundledBin = path.join(
       this.opts.extensionPath,
@@ -109,7 +109,7 @@ export class GatewayManager {
       return
     }
 
-    const logPath = path.join(os.tmpdir(), 'dsh-web-codon.log')
+    const logPath = path.join(os.tmpdir(), 'dsh-web-zao.log')
     let out: number | 'ignore' = 'ignore'
     try {
       out = fs.openSync(logPath, 'a')

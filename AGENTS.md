@@ -1,4 +1,4 @@
-# AGENTS.md — Codon AI IDE
+# AGENTS.md — Zao AI IDE
 
 基于 VSCodium fork 的独立 AI IDE。扩展源码在本仓库 `dsh-agent-extension/`；编辑器底座构建在**独立仓库** `~/Desktop/project/vscodium-fork`（不在本仓库内）。
 
@@ -10,7 +10,7 @@ npm run compile && npm test && npm run lint   # 改完必跑三件套
 code --extensionDevelopmentPath=dsh-agent-extension .   # F5 开发调试
 ```
 
-- 底座出包：`~/Desktop/project/vscodium-fork/build_codon.sh`（需 nvm node 24.15.0，全量约 45min）
+- 底座出包：`~/Desktop/project/vscodium-fork/build_zao.sh`（需 nvm node 24.15.0，全量约 45min）
 - 扩展注入已构建 app：`scripts/inject.sh <app>`；DSH 运行时入包：`scripts/vendor-dsh.sh <app>/Contents/Resources/app`
 - 品牌图标再生成：`python3 scripts/gen-brand-icons.py`
 
@@ -33,7 +33,7 @@ code --extensionDevelopmentPath=dsh-agent-extension .   # F5 开发调试
 
 - **Electron 内嵌 node 拉起网关必须加 `--expose-internals`**（cordis-plugin-hmr 硬依赖；系统 node 默认开启所以本地复现不出来）。见 `gateway.ts resolveCommand`。
 - **分发版绝不能启用 `dsh-password-gate`** 插件：所有 /api 返回 unauthenticated，面板全挂。vendor-dsh.sh 有防护；扩展侧会把 unauthenticated 翻译成修复指引。
-- vscode 打包会**丢弃未注册进编译清单的扩展的 `out/`**——build_codon.sh 末尾有补偿拷贝步骤，勿删。
+- vscode 打包会**丢弃未注册进编译清单的扩展的 `out/`**——build_zao.sh 末尾有补偿拷贝步骤，勿删。
 - DSH 是 dev preview，协议可能漂移：改协议前先用 `spike/probe.mjs` 风格脚本对活网关验证，勿信训练数据记忆。协议测试用录制语义的 FakeWebSocket（见 `src/__tests__/dshClient.test.ts`）。
 - webview 与扩展的消息 kind 已类型化于 `src/messages.ts`——加消息先改类型，两侧 switch 编译期兜底。
 - webview HTML/CSS 在 `src/webviewPage.ts`（TS 模板字符串），不是独立 html 文件。

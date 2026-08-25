@@ -28,7 +28,7 @@ beforeEach(() => {
 })
 
 describe('GatewayManager.resolveCommand', () => {
-  it('prefers the bundled runtime and launches via Codon binary in node mode with --expose-internals', () => {
+  it('prefers the bundled runtime and launches via Zao binary in node mode with --expose-internals', () => {
     mocks.existsSync.mockReturnValue(true)
     const spec = manager().resolveCommand()!
     expect(spec.cmd).toBe(process.execPath)

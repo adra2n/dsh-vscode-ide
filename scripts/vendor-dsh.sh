@@ -1,11 +1,11 @@
 #!/bin/bash
-# 把固定版本的 DSH 运行时装入 Codon.app，实现零依赖分发（用户无需 node/npm/dsh）。
-# 用法: scripts/vendor-dsh.sh /path/to/Codon.app/Contents/Resources/app
+# 把固定版本的 DSH 运行时装入 Zao.app，实现零依赖分发（用户无需 node/npm/dsh）。
+# 用法: scripts/vendor-dsh.sh /path/to/Zao.app/Contents/Resources/app
 #   可选: DSH_VERSION=x.y.z 覆盖版本（默认为已验证的固定版本）
 
 set -euo pipefail
 
-APP_DIR="${1:?用法: vendor-dsh.sh <Codon.app>/Contents/Resources/app}"
+APP_DIR="${1:?用法: vendor-dsh.sh <Zao.app>/Contents/Resources/app}"
 DSH_VERSION="${DSH_VERSION:-0.1.1-rc.2}"
 
 RUNTIME_DIR="$APP_DIR/dsh-runtime"

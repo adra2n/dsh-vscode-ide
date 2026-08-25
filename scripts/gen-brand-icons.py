@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Generate the Codon brand icon set from a programmatic master artwork.
+"""Generate the Zao brand icon set from a programmatic master artwork.
 
-Motif: DNA double helix (codon = DNA triplet) on an indigo->violet gradient,
+Motif: DNA double helix (zao = DNA triplet) on an indigo->violet gradient,
 macOS squircle-style rounded rect. Outputs icns / ico / png variants.
 """
 from __future__ import annotations
@@ -161,4 +161,4 @@ if __name__ == "__main__":
     art = rounded_gradient()
     helix(art)
     master = art.resize((S, S), Image.LANCZOS)
-    emit(master, "codon")
+    emit(master, "zao")

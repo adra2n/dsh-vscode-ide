@@ -50,7 +50,7 @@ export function extractPathHint(name: string, argsJson: unknown): string | undef
 }
 
 export class GitHeadContentProvider implements vscode.TextDocumentContentProvider {
-  static readonly scheme = 'codon-base'
+  static readonly scheme = 'zao-base'
 
   async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
     try {

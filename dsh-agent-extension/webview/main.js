@@ -72,7 +72,7 @@ function ensureHero() {
   if (!hero) {
     hero = document.createElement('div')
     hero.className = 'hero'
-    hero.innerHTML = '<div class="logo"><b>Codon</b> AI</div>'
+    hero.innerHTML = '<div class="logo"><b>Zao</b> AI</div>'
       + '<div class="sub">把任务交给 AI，直接在编辑器里落地改动。<br>写文件等敏感操作会先向你申请授权。</div>'
       + '<div class="hero-chips">'
       + '<div class="chip-card" data-q="介绍一下这个项目的整体结构和核心模块"><div class="ic">📖</div><div class="tt">介绍这个项目</div><div class="ds">梳理目录结构与核心模块</div></div>'

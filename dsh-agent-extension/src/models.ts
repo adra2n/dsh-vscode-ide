@@ -42,7 +42,7 @@ export function credentialRef(providerId: string): string {
       .toUpperCase()
       .replace(/[^A-Z0-9_]/g, '_')
       .replace(/^([0-9])/, 'P$1') || 'PROVIDER'
-  return `CODON_${suffix}_API_KEY`
+  return `ZAO_${suffix}_API_KEY`
 }
 
 /**

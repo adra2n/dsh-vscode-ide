@@ -56,6 +56,7 @@
 
 > 前置：核心链路已可用（网关自动拉起 / 流式对话 / 会话 / 审批）。
 > 按五阶段推进；里程碑 M1 = 自用稳定版（Phase 2 完）、M2 = 可分发 Alpha（Phase 4 Mac 包）、M3 = 正式版（三平台 + inline diff）。
+> **产品更名（2026-08-25）：Codon → Zao（造）**，公司品牌 = 亦阳智创 yyzc（母品牌背书，JetBrains/IntelliJ 模式）。改名动因：Exaloop 的 Python 编译器 Codon 同类目强冲突。此前 tasks 中的 Codon.app 等为历史记录，现名 Zao.app。
 
 ### Phase 1 · 质量地基（~1 周，先行）✅ 2026-08-22 完成
 

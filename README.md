@@ -1,4 +1,4 @@
-# Codon AI IDE
+# Zao AI IDE
 
 基于 VSCodium (Code - OSS) fork 的 AI-first 桌面 IDE，内置 DeepSeek Harness (DSH) agent 面板。不依赖第三方 AI 产品，可独立分发。
 
@@ -40,11 +40,11 @@ dsh-vscode-ide/
 打包后运行 vendor 脚本，把 `@deepseek-ai/dsh` 装进应用：
 
 ```bash
-scripts/vendor-dsh.sh /path/to/Codon.app/Contents/Resources/app
+scripts/vendor-dsh.sh /path/to/Zao.app/Contents/Resources/app
 # 可选：DSH_VERSION=x.y.z 覆盖版本（默认固定为已验证版本）
 ```
 
-产物位于 `app/dsh-runtime/`。扩展探测到后用 Codon 自身二进制的 Node 模式
+产物位于 `app/dsh-runtime/`。扩展探测到后用 Zao 自身二进制的 Node 模式
 （`ELECTRON_RUN_AS_NODE=1`）拉起网关，无需用户安装 node/npm/dsh。
 
 启动命令优先级：设置 `gatewayCommand` > 内置运行时 > PATH 上的 `dsh` > npx 缓存 > `npm exec`。
@@ -84,7 +84,7 @@ code --extensionDevelopmentPath=dsh-agent-extension .
 
 ```
 ┌─────────────────────────────────────────┐
-│  VS Code / Codon IDE                    │
+│  VS Code / Zao IDE                    │
 │  ┌───────────────────────────────────┐  │
 │  │ dsh-agent-extension               │  │
 │  │  extension.ts  ←→ webview/main.js │  │
@@ -113,7 +113,7 @@ npm test          # vitest（协议/纯函数 28 用例）
 npm run lint      # eslint
 ```
 
-打包与品牌：`scripts/vendor-dsh.sh`（DSH 运行时入包）、`scripts/inject.sh`（扩展注入已构建 app）、`scripts/gen-brand-icons.py`（品牌图标再生成）。VSCodium 底座构建在独立仓库 `~/Desktop/project/vscodium-fork`（`build_codon.sh` 一键出包）。
+打包与品牌：`scripts/vendor-dsh.sh`（DSH 运行时入包）、`scripts/inject.sh`（扩展注入已构建 app）、`scripts/gen-brand-icons.py`（品牌图标再生成）。VSCodium 底座构建在独立仓库 `~/Desktop/project/vscodium-fork`（`build_zao.sh` 一键出包）。
 
 ## 路线图
 
@@ -124,7 +124,7 @@ npm run lint      # eslint
 - [x] Settings → Models：自托管 OpenAI 兼容 provider，Key 走 DSH credentials 层不落明文
 - [x] 默认权限预设切换（read-only / workspace-write / danger-full-access）
 - [x] 本地 DSH 运行时分发（scripts/vendor-dsh.sh，含 password-gate 防护）
-- [x] Mac 出包流水线 + Codon 品牌图标（P4.1/P4.2/P4.4）
+- [x] Mac 出包流水线 + Zao 品牌图标（P4.1/P4.2/P4.4）
 - [ ] 内核级 inline diff 审阅（fork 优势，扩展版 diff 已就绪）
 - [ ] Mac 签名+公证；Win/Linux 打包
 - 详细任务跟踪见 `openspec/changes/dsh-vscode-agent-ide/tasks.md`，DSH 协议事实速查见 `AGENTS.md`

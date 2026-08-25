@@ -1,9 +1,9 @@
 {
   "name": "dsh-agent",
-  "displayName": "Codon Agent",
-  "description": "AI-first agent panel for Codon, backed by the DeepSeek Harness (DSH) gateway.",
+  "displayName": "Zao Agent",
+  "description": "AI-first agent panel for Zao, backed by the DeepSeek Harness (DSH) gateway.",
   "version": "0.1.0",
-  "publisher": "codon",
+  "publisher": "zao",
   "engines": {
     "vscode": "^1.90.0"
   },

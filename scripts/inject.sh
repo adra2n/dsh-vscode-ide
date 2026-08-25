@@ -1,14 +1,14 @@
 #!/bin/bash
-# Inject dsh-agent-extension into Codon.app
-# Usage: ./inject.sh [CODON_APP_PATH]
+# Inject dsh-agent-extension into Zao.app
+# Usage: ./inject.sh [ZAO_APP_PATH]
 
 set -e
 
-CODON_APP="${1:-/Users/adrain/Desktop/project/vscodium-fork/VSCode-darwin-x64/Codon.app}"
-EXT_DIR="$CODON_APP/Contents/Resources/app/extensions/dsh-agent"
+ZAO_APP="${1:-/Users/adrain/Desktop/project/vscodium-fork/VSCode-darwin-x64/Zao.app}"
+EXT_DIR="$ZAO_APP/Contents/Resources/app/extensions/dsh-agent"
 SRC_DIR="$(cd "$(dirname "$0")/.." && pwd)/dsh-agent-extension"
 
-echo "Injecting dsh-agent-extension into $CODON_APP"
+echo "Injecting dsh-agent-extension into $ZAO_APP"
 
 # Create extension directory
 mkdir -p "$EXT_DIR"
