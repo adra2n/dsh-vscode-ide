@@ -89,7 +89,7 @@
 ### Phase 5 · 差异化产品力（持续）
 
 - [ ] P5.1 内核级 inline diff 审阅（fork 终极形态，tasks 4.6）
-- [ ] P5.2 AI-first 主页打磨：首启向导（选模型/填 Key/选项目）、空状态引导模板
+- [x] P5.2 AI-first 主页打磨：首启向导 ✅（globalState 一次性标记；从 DSH settings 命名空间解析可配置模型来源（llm-deepseek 顶层 apiKeyEnv / llm-pi-ai providers，baseURL 标记为自托管），选中填 Key → credentials.set，可跳过；完成后 modelsView 刷新头部选择器。31 测试全绿）
 - [ ] P5.3 VSCode 设置/扩展导入迁移路径
 - [ ] P5.4 上下文压力优化：接近阈值建议 compact/新会话
 
