@@ -49,13 +49,14 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
 #main { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
 #bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--vscode-panel-border); background: var(--vscode-editor-background); }
 #status { font-weight: 600; white-space: nowrap; }
+#status.warn { color: var(--vscode-errorForeground); }
 .model { flex: 0 1 auto; max-width: 240px; background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border: 1px solid var(--vscode-dropdown-border); border-radius: 6px; padding: 3px 6px; font-size: 12px; }
+#composer .model { background: transparent; color: var(--vscode-foreground); border: none; opacity: .85; max-width: 200px; padding: 2px 4px; }
+#composer .model:hover, #composer .model:focus { opacity: 1; background: var(--vscode-dropdown-background); }
 .toolbtn { margin-left: 8px; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: 1px solid var(--vscode-button-border, transparent); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
 .toolbtn:hover { background: var(--vscode-button-secondaryHoverBackground); }
 .toolbtn:disabled { opacity: .4; cursor: default; }
-#stop { margin-left: auto; }
-#stop.stop-run { background: var(--vscode-inputValidation-errorBackground); color: #ffb3b3; border-color: var(--vscode-inputValidation-errorBorder, transparent); opacity: 1; }
-#status.warn { color: var(--vscode-errorForeground); }
+#effort[hidden] { display: none; }
 .gw { width: 8px; height: 8px; border-radius: 50%; background: var(--vscode-testing-iconPassed, #4ec994); flex: none; }
 .gw.wait { background: var(--vscode-editorWarning, #cca700); }
 .gw.off { background: var(--vscode-errorForeground); }
@@ -99,7 +100,19 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
 #effort[hidden] { display: none; }
 .step { align-self: stretch; border: 1px solid var(--vscode-panel-border); border-left: 3px solid var(--vscode-textLink-foreground); border-radius: 8px; padding: 6px 10px; margin: 2px 0; background: var(--vscode-editorWidget-background); }
 .step > .head { font-weight: 600; font-size: 12px; opacity: .9; }
-.toolcard .head { cursor: pointer; user-select: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.toolcard { border-left: 2px solid var(--vscode-panel-border); background: transparent; box-shadow: none; }
+.turncard { align-self: stretch; border: 1px solid var(--vscode-panel-border); border-radius: 10px; padding: 8px 11px; margin: 2px 0; background: var(--vscode-editorWidget-background); }
+.turncard .tc-head { font-weight: 600; font-size: 12px; margin-bottom: 5px; }
+.turncard .tc-files { display: flex; flex-direction: column; gap: 2px; }
+.turncard .tc-file { display: flex; align-items: center; gap: 7px; font-size: 12px; padding: 3px 4px; border-radius: 5px; cursor: pointer; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.turncard .tc-file:hover { background: var(--vscode-list-hoverBackground); }
+.turncard .tc-ic { opacity: .6; font-size: 11px; flex: none; }
+.turncard .tc-path { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.diffstat { font-size: 11px; font-family: ui-monospace, Menlo, Consolas, monospace; flex: none; }
+.diffstat .da { color: var(--vscode-testing-iconPassed, #4ec994); font-style: normal; }
+.diffstat .dd { color: var(--vscode-errorForeground, #f14c4c); font-style: normal; }
+.sess .diffstat { opacity: .9; }
+.toolcard .head { cursor: pointer; user-select: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 400; opacity: .7; }
 .toolcard .head:hover { opacity: 1; color: var(--vscode-textLink-foreground); }
 .toolcard.collapsed .tc-args, .toolcard.collapsed .tc-result { display: none; }
 .tc-args, .tc-result { background: var(--vscode-textCodeBlock-background); border-radius: 6px; padding: 6px 8px; margin-top: 5px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; white-space: pre-wrap; word-break: break-all; max-height: 260px; overflow-y: auto; }
@@ -116,13 +129,17 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
 .approval .allow { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
 .approval .always { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border-color: var(--vscode-focusBorder); }
 .approval .deny { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
-#input { border-top: 1px solid var(--vscode-panel-border); background: var(--vscode-editor-background); padding: 10px 12px 8px; }
-.in-row { display: flex; gap: 8px; align-items: flex-end; }
-#ta { flex: 1; resize: none; border-radius: 8px; border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); background: var(--vscode-input-background); color: var(--vscode-input-foreground); padding: 8px 10px; font-family: inherit; font-size: 13px; min-height: 38px; max-height: 132px; outline: none; }
-#ta:focus { border-color: var(--vscode-focusBorder); }
-#send { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; border-radius: 8px; padding: 9px 18px; cursor: pointer; font-size: 13px; height: 38px; }
-#send:hover { background: var(--vscode-button-hoverBackground); }
-.in-status { display: flex; justify-content: space-between; margin-top: 5px; font-size: 11px; opacity: .55; }
+#input { border-top: 1px solid var(--vscode-panel-border); background: var(--vscode-editor-background); padding: 10px 12px 10px; }
+#composer { border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); border-radius: 12px; background: var(--vscode-input-background); padding: 8px 10px 6px; transition: border-color .12s; }
+#composer:focus-within { border-color: var(--vscode-focusBorder); }
+#ta { width: 100%; resize: none; border: none; background: transparent; color: var(--vscode-input-foreground); padding: 2px 2px 6px; font-family: inherit; font-size: 13px; min-height: 20px; max-height: 132px; outline: none; }
+.composer-row { display: flex; gap: 6px; align-items: center; }
+.composer-hint { font-size: 11px; opacity: .45; }
+.round-btn { margin-left: auto; width: 30px; height: 30px; border-radius: 50%; border: none; background: var(--vscode-button-background); color: var(--vscode-button-foreground); font-size: 14px; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.round-btn:hover { background: var(--vscode-button-hoverBackground); }
+.round-btn:disabled { opacity: .4; cursor: default; }
+#stop.round-btn { background: var(--vscode-inputValidation-errorBackground, #5a1d1d); color: #ffb3b3; }
+#in-ctx { font-size: 11px; opacity: .55; margin-right: auto; }
 .hero { margin: auto; text-align: center; max-width: 460px; }
 .hero .logo { font-size: 30px; font-weight: 700; letter-spacing: 1px; }
 .hero .logo b { color: var(--vscode-textLink-foreground); }
@@ -187,11 +204,8 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
 <span id="gw-dot" class="gw wait" title="正在连接 DSH 网关"></span>
 <span id="status">AI 对话</span>
 <span id="ctx-chip" class="ctx-chip" hidden><span id="ctx-text"></span><span class="bar"><i id="ctx-bar"></i></span></span>
-<select id="model" class="model"></select>
-<select id="effort" class="model" hidden></select>
-<button id="stop" class="toolbtn" disabled>停止</button>
 <button id="edit" class="toolbtn">只读/编辑</button>
 <button id="settings" class="toolbtn" title="设置">&#x2699;</button>
-</div><div id="settings-overlay" hidden><div id="settings-panel"><div class="settings-header"><span>设置</span><button id="settings-close" class="toolbtn">&times;</button></div><div class="settings-body"><section class="settings-section"><h3>连接</h3><label>网关地址</label><input id="cfg-gateway" type="text" /><label>网关启动命令（可选，留空自动探测）</label><input id="cfg-dshcmd" type="text" placeholder="如 /usr/local/bin/dsh" /></section><section class="settings-section"><h3>权限预设</h3><label>默认预设（新会话生效）</label><select id="cfg-perm" class="model"></select><p class="settings-hint">read-only 只读 / workspace-write 工作区写入（需审批）/ danger-full-access 完全访问免审批</p><p class="settings-hint">以下工具将被自动放行，无需逐次确认</p><div id="cfg-tools-list"></div><p id="cfg-tools-empty" class="settings-hint">尚无工具记录。当 AI 请求执行工具时，可点击「始终允许」将其添加。</p></section><section class="settings-section"><h3>模型（自托管 / OpenAI 兼容）</h3><div id="cfg-providers-list"></div><p id="cfg-providers-empty" class="settings-hint">尚无自定义 provider。添加后可在对话顶部选择。</p><form id="provider-form"><label>名称（唯一 ID）</label><input id="np-id" type="text" placeholder="my-vllm" required /><label>Base URL（OpenAI 兼容）</label><input id="np-url" type="text" placeholder="http://127.0.0.1:8000/v1" required /><label>API Key</label><input id="np-key" type="password" placeholder="sk-…" required /><label>模型 ID</label><input id="np-model" type="text" placeholder="Qwen2.5-72B-Instruct" required /><button id="np-add" class="toolbtn" type="submit">＋ 添加 provider</button></form></section></div><div class="settings-footer"><button id="settings-save" class="toolbtn">保存</button></div></div></div><div id="changes" hidden></div><div id="log"></div><div id="input"><div class="in-row"><textarea id="ta" rows="1" placeholder="要做什么？"></textarea><button id="send">发送</button></div><div class="in-status"><span id="in-ctx"></span><span>Enter 发送 · Shift+Enter 换行</span></div></div></div></div>
+</div><div id="settings-overlay" hidden><div id="settings-panel"><div class="settings-header"><span>设置</span><button id="settings-close" class="toolbtn">&times;</button></div><div class="settings-body"><section class="settings-section"><h3>连接</h3><label>网关地址</label><input id="cfg-gateway" type="text" /><label>网关启动命令（可选，留空自动探测）</label><input id="cfg-dshcmd" type="text" placeholder="如 /usr/local/bin/dsh" /></section><section class="settings-section"><h3>权限预设</h3><label>默认预设（新会话生效）</label><select id="cfg-perm" class="model"></select><p class="settings-hint">read-only 只读 / workspace-write 工作区写入（需审批）/ danger-full-access 完全访问免审批</p><p class="settings-hint">以下工具将被自动放行，无需逐次确认</p><div id="cfg-tools-list"></div><p id="cfg-tools-empty" class="settings-hint">尚无工具记录。当 AI 请求执行工具时，可点击「始终允许」将其添加。</p></section><section class="settings-section"><h3>模型（自托管 / OpenAI 兼容）</h3><div id="cfg-providers-list"></div><p id="cfg-providers-empty" class="settings-hint">尚无自定义 provider。添加后可在对话顶部选择。</p><form id="provider-form"><label>名称（唯一 ID）</label><input id="np-id" type="text" placeholder="my-vllm" required /><label>Base URL（OpenAI 兼容）</label><input id="np-url" type="text" placeholder="http://127.0.0.1:8000/v1" required /><label>API Key</label><input id="np-key" type="password" placeholder="sk-…" required /><label>模型 ID</label><input id="np-model" type="text" placeholder="Qwen2.5-72B-Instruct" required /><button id="np-add" class="toolbtn" type="submit">＋ 添加 provider</button></form></section></div><div class="settings-footer"><button id="settings-save" class="toolbtn">保存</button></div></div></div><div id="changes" hidden></div><div id="log"></div><div id="input"><div id="composer"><textarea id="ta" rows="1" placeholder="规划、搜索、构建一切……"></textarea><div class="composer-row"><select id="model" class="model"></select><select id="effort" class="model" hidden></select><span id="in-ctx"></span><span class="composer-hint">Enter 发送 · Shift+Enter 换行</span><button id="stop" class="round-btn" title="停止" hidden>■</button><button id="send" class="round-btn" title="发送">↑</button></div></div></div></div></div>
 <script nonce="${nonceVal}" src="${src}"></script></body></html>`
 }

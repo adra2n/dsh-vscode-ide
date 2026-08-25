@@ -61,8 +61,9 @@ function sendSelectModel() {
 let statusTitle = 'AI 对话'
 function setRunning(v) {
   running = v
-  if (stopBtn) stopBtn.disabled = !v
-  if (stopBtn) stopBtn.classList.toggle('stop-run', !!v)
+  // 运行中：发送钮变停止钮（Cursor 式圆钮）；停止即中断当前 turn
+  if (sendBtn) sendBtn.hidden = !!v
+  if (stopBtn) stopBtn.hidden = !v
 }
 
 // 空态 hero：会话无任何内容时展示引导卡片，出现首条内容后自动移除
@@ -189,6 +190,47 @@ function renderToolResult(ev) {
 }
 
 function clearToolCards() { toolCards.clear() }
+
+// ---- 本轮改动卡片（Cursor 式，内嵌对话流）----
+function renderTurnCard(files) {
+  if (!files.length) return
+  hideHero()
+  const card = document.createElement('div')
+  card.className = 'turncard'
+  const head = document.createElement('div')
+  head.className = 'tc-head'
+  const totalAdd = files.reduce((n, f) => n + (f.add || 0), 0)
+  const totalDel = files.reduce((n, f) => n + (f.del || 0), 0)
+  head.innerHTML = '📄 本轮改动 <span class="diffstat"><i class="da">+' + totalAdd + '</i> <i class="dd">-' + totalDel + '</i></span>'
+  card.appendChild(head)
+  const list = document.createElement('div')
+  list.className = 'tc-files'
+  const seen = new Set()
+  for (const f of files) {
+    if (seen.has(f.path)) continue
+    seen.add(f.path)
+    const row = document.createElement('div')
+    row.className = 'tc-file'
+    row.title = f.path + '（点击查看 diff）'
+    const icon = document.createElement('span')
+    icon.className = 'tc-ic'
+    icon.textContent = f.status === 'created' ? '＋' : f.status === 'deleted' ? '✕' : '±'
+    const name = document.createElement('span')
+    name.className = 'tc-path'
+    name.textContent = f.path
+    const ds = document.createElement('span')
+    ds.className = 'diffstat'
+    ds.innerHTML = '<i class="da">+' + (f.add || 0) + '</i> <i class="dd">-' + (f.del || 0) + '</i>'
+    row.appendChild(icon)
+    row.appendChild(name)
+    row.appendChild(ds)
+    if (f.status !== 'deleted') row.onclick = () => vscode.postMessage({ kind: 'openDiff', path: f.path })
+    list.appendChild(row)
+  }
+  card.appendChild(list)
+  log.appendChild(card)
+  log.scrollTop = log.scrollHeight
+}
 // 去重：流式 chunk 已渲染过的文本，后续 assistant/message / inbox 回放不再重复渲染
 let chunkRenderedTexts = new Set()
 function normText(t) { return String(t || '').trim() }
@@ -250,6 +292,9 @@ function sessItem(s) {
   if (time) parts.push('<span>' + time + '</span>')
   const stats = s.projections?.values?.sessionStats
   if (stats?.turns) parts.push('<span>' + stats.turns + ' 轮</span>')
+  if (s.changes && (s.changes.add || s.changes.del)) {
+    parts.push('<span class="diffstat"><i class="da">+' + s.changes.add + '</i> <i class="dd">-' + s.changes.del + '</i></span>')
+  }
   l2.innerHTML = parts.join('')
   item.appendChild(l1)
   item.appendChild(l2)
@@ -869,6 +914,8 @@ window.addEventListener('message', (e) => {
     }
   } else if (m.kind === 'modelProviders') {
     renderModelProviders(m.providers || [])
+  } else if (m.kind === 'turnChanges') {
+    if (!m.sessionId || m.sessionId === activeSessionId) renderTurnCard(m.files || [])
   } else if (m.kind === 'modelsView') {
     populateModelSelect(m.models)
   } else if (m.kind === 'onboarding') {

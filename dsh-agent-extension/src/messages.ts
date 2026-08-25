@@ -16,6 +16,8 @@ export interface SessionSummary {
   running: boolean
   cwd: string
   projections?: unknown
+  /** 会话累计改动行数（扩展侧注入，非网关字段） */
+  changes?: { add: number; del: number }
 }
 
 export interface WorkspaceSummary {
@@ -72,10 +74,12 @@ export type WebviewToExt =
     }
   | { kind: 'removeModelProvider'; id: string }
 
-/** 改动文件条目（path 相对 workspace 根）。 */
+/** 改动文件条目（path 相对 workspace 根；add/del 为相对 git HEAD 的行数统计，未知省略）。 */
 export interface ChangedFile {
   path: string
   status: 'created' | 'modified' | 'deleted'
+  add?: number
+  del?: number
 }
 
 export type GatewayUiStatus = GatewayStatus | 'downloading'
@@ -94,6 +98,7 @@ export type ExtToWebview =
     }
   | { kind: 'workspaces'; workspaces: WorkspaceSummary[]; sessions: SessionSummary[] }
   | { kind: 'changedFiles'; sessionId?: string; files: ChangedFile[] }
+  | { kind: 'turnChanges'; sessionId?: string; files: ChangedFile[] }
   | { kind: 'history'; sessionId: string; events: unknown[] }
   | { kind: 'sessionSwitched'; sessionId: string }
   | { kind: 'error'; message: string }

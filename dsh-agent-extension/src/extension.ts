@@ -339,6 +339,11 @@ class DshViewProvider implements vscode.WebviewViewProvider {
     try {
       sessions = (await this.client!.listSessions()).items || []
     } catch {}
+    // 注入扩展侧累计改动统计（Cursor 式 +N -N）
+    for (const s of sessions) {
+      const t = this.tracker.totals(s.sessionId)
+      if (t.add || t.del) s.changes = t
+    }
     return { workspaces, sessions }
   }
 

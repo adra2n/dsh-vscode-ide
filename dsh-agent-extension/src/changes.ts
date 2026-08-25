@@ -2,6 +2,7 @@ import { execFile } from 'child_process'
 import * as vscode from 'vscode'
 import type { ChangedFile, DshFrame, PostToWebview } from './messages'
 import * as path from 'path'
+import * as fs from 'fs'
 
 const WATCHER_NOISE = /^(\.git|node_modules)\//
 
@@ -12,6 +13,29 @@ function exec(cmd: string, args: string[], cwd: string, timeout = 5000): Promise
       else resolve(stdout.toString())
     })
   })
+}
+
+/** 相对 git HEAD 的行数统计；untracked 文件按整文件计新增。 */
+async function lineStats(root: string, rel: string, status: ChangedFile['status']): Promise<{ add: number; del: number }> {
+  try {
+    const out = await exec('git', ['-C', root, 'diff', '--numstat', 'HEAD', '--', rel], root, 3000)
+    const line = out.split('\n').find((l) => l.trim().endsWith(rel) || l.includes('\t' + rel))
+    if (line) {
+      const [a, d] = line.split('\t')
+      return { add: a === '-' ? 0 : parseInt(a, 10) || 0, del: d === '-' ? 0 : parseInt(d, 10) || 0 }
+    }
+  } catch {
+    /* 无 git 或非 tracked，走 fallback */
+  }
+  if (status === 'created') {
+    try {
+      const content = fs.readFileSync(path.join(root, rel), 'utf8')
+      return { add: content ? content.split('\n').length : 0, del: 0 }
+    } catch {
+      return { add: 0, del: 0 }
+    }
+  }
+  return { add: 0, del: 0 }
 }
 
 /** 解析 `git status --porcelain` 输出为相对路径集合。 */
@@ -93,6 +117,15 @@ export class ChangeTracker implements vscode.Disposable {
     return sessionId ? (this.bySession.get(sessionId) ?? []) : []
   }
 
+  /** 会话累计 ± 行数（供侧栏统计）。 */
+  totals(sessionId?: string): { add: number; del: number } {
+    const files = this.get(sessionId)
+    return files.reduce(
+      (acc, f) => ({ add: acc.add + (f.add ?? 0), del: acc.del + (f.del ?? 0) }),
+      { add: 0, del: 0 },
+    )
+  }
+
   clear(sessionId?: string) {
     if (sessionId) this.bySession.delete(sessionId)
     else this.bySession.clear()
@@ -161,12 +194,15 @@ export class ChangeTracker implements vscode.Disposable {
           /* 已被再次删除则保留原状态 */
         }
       }
-      fresh.push({ path: rel, status })
+      const withStats: ChangedFile = { path: rel, status }
+      if (root) Object.assign(withStats, await lineStats(root.uri.fsPath, rel, status))
+      fresh.push(withStats)
     }
 
     if (fresh.length === 0 && !this.bySession.has(sid)) return
     const merged = [...(this.bySession.get(sid) ?? []), ...fresh]
     this.bySession.set(sid, merged)
+    if (fresh.length > 0) this.deps.post({ kind: 'turnChanges', sessionId: sid, files: fresh })
     this.deps.post({ kind: 'changedFiles', sessionId: sid, files: merged })
     this.pending.clear()
   }
