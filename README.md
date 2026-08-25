@@ -100,9 +100,20 @@ code --extensionDevelopmentPath=dsh-agent-extension .
      └─────────────────┘
 ```
 
-- **extension.ts** — 注册 WebviewView provider，处理 webview 消息（会话管理、模型切换、工具审批、文件操作）
-- **dshClient.ts** — 封装 DSH 网关 RPC 调用 + WebSocket 事件流，支持自动重连（指数退避）、按 session 过滤帧
-- **webview/main.js** — 纯 vanilla JS 渲染层，处理流式 chunk、Markdown 渲染、会话列表、审批卡片
+- **extension.ts** — 编排层：注册 WebviewView provider，把 webview 消息路由到各模块
+- **src/** 模块 — `dshClient`（网关 RPC+WS）/ `gateway`（网关生命周期）/ `approvals`（审批）/ `changes`（改动追踪+diff）/ `models` / `permissions`（设置写入）/ `workspaceFiles` / `webviewPage` / `messages`（类型化消息协议）
+- **webview/main.js** — 纯 vanilla JS 渲染层，处理流式 chunk、Markdown 渲染、会话列表、审批卡片、改动文件条
+
+## 开发命令
+
+```bash
+cd dsh-agent-extension
+npm run compile   # tsc 编译到 out/
+npm test          # vitest（协议/纯函数 28 用例）
+npm run lint      # eslint
+```
+
+打包与品牌：`scripts/vendor-dsh.sh`（DSH 运行时入包）、`scripts/inject.sh`（扩展注入已构建 app）、`scripts/gen-brand-icons.py`（品牌图标再生成）。VSCodium 底座构建在独立仓库 `~/Desktop/project/vscodium-fork`（`build_codon.sh` 一键出包）。
 
 ## 路线图
 
@@ -113,10 +124,10 @@ code --extensionDevelopmentPath=dsh-agent-extension .
 - [x] Settings → Models：自托管 OpenAI 兼容 provider，Key 走 DSH credentials 层不落明文
 - [x] 默认权限预设切换（read-only / workspace-write / danger-full-access）
 - [x] 本地 DSH 运行时分发（scripts/vendor-dsh.sh，含 password-gate 防护）
+- [x] Mac 出包流水线 + Codon 品牌图标（P4.1/P4.2/P4.4）
 - [ ] 内核级 inline diff 审阅（fork 优势，扩展版 diff 已就绪）
-- [ ] 设置面板增强（模型默认配置细化）
-- [ ] 跨平台构建流水线（Mac / Win / Linux）与签名公证
-- 详细任务跟踪见 `openspec/changes/dsh-vscode-agent-ide/tasks.md`
+- [ ] Mac 签名+公证；Win/Linux 打包
+- 详细任务跟踪见 `openspec/changes/dsh-vscode-agent-ide/tasks.md`，DSH 协议事实速查见 `AGENTS.md`
 
 ## License
 
