@@ -12,6 +12,47 @@ export interface CustomProviderInfo {
   credentialConfigured?: boolean
 }
 
+/** 首启向导用的 provider 条目（内置目录 + 自定义，含 Key 配置状态）。 */
+export interface OnboardingProvider {
+  id: string
+  name: string
+  /** credentials ref（环境变量名）；无 Key 语义的 provider 为空 */
+  ref?: string
+  configured: boolean
+  kind: 'builtin' | 'custom'
+}
+
+/**
+ * 从 settings.describe 的命名空间里提取可配置模型来源（纯函数，便于单测）。
+ * - llm-deepseek：官方 DeepSeek，apiKeyEnv 在 ns 顶层
+ * - llm-pi-ai：多 provider hub，apiKeyEnv 在 providers.<id> 下；带 baseURL 视为 custom
+ */
+export function extractOnboardingProviders(
+  namespaces: { ns: string; value?: any }[],
+): OnboardingProvider[] {
+  const out: OnboardingProvider[] = []
+  for (const ns of namespaces) {
+    if (ns.ns === 'llm-deepseek') {
+      const ref = ns.value?.apiKeyEnv
+      if (typeof ref === 'string' && ref) {
+        out.push({ id: 'deepseek-official', name: 'DeepSeek 官方', ref, configured: false, kind: 'builtin' })
+      }
+    } else if (ns.ns === 'llm-pi-ai') {
+      for (const [id, p] of Object.entries((ns.value?.providers ?? {}) as Record<string, any>)) {
+        if (!p || typeof p.apiKeyEnv !== 'string' || !p.apiKeyEnv) continue
+        out.push({
+          id,
+          name: id,
+          ref: p.apiKeyEnv,
+          configured: false,
+          kind: typeof p.baseURL === 'string' ? 'custom' : 'builtin',
+        })
+      }
+    }
+  }
+  return out
+}
+
 export interface ProviderDraft {
   id: string
   baseURL: string
@@ -90,5 +131,29 @@ export class ModelsManager {
     const ref = credentialRef(id)
     await client.mutateSettings(LLM_NS, [{ op: 'unset', path: ['providers', id] }])
     await client.unsetCredential(ref)
+  }
+
+  /** 首启向导：枚举可配置模型来源并标注 Key 状态。 */
+  async onboardingProviders(): Promise<OnboardingProvider[]> {
+    const client = this.getClient()
+    const described = await client.describeSettings()
+    const providers = extractOnboardingProviders(described.namespaces)
+    const refs = providers.map((p) => p.ref!).filter(Boolean)
+    if (refs.length === 0) return providers
+    const creds = await client.describeCredentials(refs)
+    for (const p of providers) {
+      p.configured = creds.credentials[p.ref!]?.configured ?? false
+    }
+    return providers
+  }
+
+  /** 首启向导：为指定 provider 保存 API Key（写入 credentials 层）。 */
+  async saveKey(providerId: string, key: string): Promise<void> {
+    const client = this.getClient()
+    const described = await client.describeSettings()
+    const all = extractOnboardingProviders(described.namespaces)
+    const target = all.find((p) => p.id === providerId)
+    if (!target?.ref) throw new Error(`未找到模型来源 ${providerId} 的凭据配置`)
+    await client.setCredential(target.ref, key)
   }
 }

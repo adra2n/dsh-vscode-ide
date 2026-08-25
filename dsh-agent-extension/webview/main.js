@@ -806,29 +806,33 @@ function answer(approvalId, outcome, card) {
   if (card) card.innerHTML = '<div class="tool">已' + label + '</div>'
 }
 
+function populateModelSelect(models) {
+  modelsData = models
+  modelSel.innerHTML = ''
+  for (const g of models.groups || []) {
+    const og = document.createElement('optgroup')
+    og.label = g.name
+    for (const md of g.models || []) {
+      const o = document.createElement('option')
+      o.value = JSON.stringify({ provider: g.id, model: md.id })
+      o.textContent = md.name
+      og.appendChild(o)
+    }
+    modelSel.appendChild(og)
+  }
+  const cur = models.current
+  if (cur) {
+    const want = JSON.stringify({ provider: cur.provider, model: cur.model })
+    for (const o of modelSel.options) if (o.value === want) { o.selected = true; break }
+  }
+  syncEffortOptions(cur?.reasoningEffort)
+}
+
 window.addEventListener('message', (e) => {
   const m = e.data
   console.log('[DSH Webview] Received message:', m.kind)
   if (m.kind === 'init') {
-    modelsData = m.models
-    modelSel.innerHTML = ''
-    for (const g of m.models.groups || []) {
-      const og = document.createElement('optgroup')
-      og.label = g.name
-      for (const md of g.models || []) {
-        const o = document.createElement('option')
-        o.value = JSON.stringify({ provider: g.id, model: md.id })
-        o.textContent = md.name
-        og.appendChild(o)
-      }
-      modelSel.appendChild(og)
-    }
-    const cur = m.models.current
-    if (cur) {
-      const want = JSON.stringify({ provider: cur.provider, model: cur.model })
-      for (const o of modelSel.options) if (o.value === want) { o.selected = true; break }
-    }
-    syncEffortOptions(cur?.reasoningEffort)
+    populateModelSelect(m.models)
     activeSessionId = m.sessionId
     vscode.setState({ sessionId: m.sessionId })
     setRunning(false)
@@ -865,6 +869,11 @@ window.addEventListener('message', (e) => {
     }
   } else if (m.kind === 'modelProviders') {
     renderModelProviders(m.providers || [])
+  } else if (m.kind === 'modelsView') {
+    populateModelSelect(m.models)
+  } else if (m.kind === 'onboarding') {
+    if (m.needs) showOnboarding(m.providers || [])
+    else hideOnboarding()
   } else if (m.kind === 'gateway') {
     if (gwDot) {
       gwDot.classList.toggle('wait', m.status === 'connecting' || m.status === 'downloading')
@@ -1093,6 +1102,63 @@ if (settingsSave) settingsSave.onclick = () => {
   })
 }
 
+// ---- 首启向导（P5.2）：选模型来源 → 填 Key → 完成 ----
+let obProviders = []
+let obSelected = null
+
+function showOnboarding(providers) {
+  obProviders = providers
+  let ov = document.getElementById('ob-overlay')
+  if (!ov) {
+    ov = document.createElement('div')
+    ov.id = 'ob-overlay'
+    ov.style.cssText = 'position:absolute;inset:0;z-index:120;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;'
+    document.getElementById('main').appendChild(ov)
+  }
+  ov.style.display = 'flex'
+
+  const rows = providers.map((p, i) => {
+    const badge = p.kind === 'custom' ? '自托管' : '内置'
+    const key = p.configured ? '<span class="pkey-ok">🔑 已配置</span>' : '<span class="pkey-miss">🔑 待填</span>'
+    return '<label class="ob-row"><input type="radio" name="obp" value="' + i + '"' + (i === 0 ? ' checked' : '') + '>'
+      + '<span class="ob-name">' + escapeHtml(p.name) + '</span>'
+      + '<span class="ob-badge">' + badge + '</span>' + key + '</label>'
+  }).join('')
+
+  ov.innerHTML = '<div id="ob-panel">'
+    + '<div class="ob-title">欢迎使用 <b>Zao</b> AI</div>'
+    + '<div class="ob-sub">一分钟完成模型配置，之后可随时在 ⚙ 设置中修改。</div>'
+    + (providers.length
+        ? '<div class="ob-list">' + rows + '</div>'
+          + '<div id="ob-keywrap" hidden><label>API Key</label><input id="ob-key" type="password" placeholder="sk-…" /></div>'
+        : '<div class="ob-sub">未发现可配置的模型来源（网关未就绪或全部已配置），可直接开始使用。</div>')
+    + '<div class="ob-actions"><button id="ob-skip" class="toolbtn">跳过</button>'
+    + '<button id="ob-done" class="toolbtn" style="background:var(--vscode-button-background);color:var(--vscode-button-foreground)">完成</button></div>'
+    + '</div>'
+
+  const keywrap = ov.querySelector('#ob-keywrap')
+  const sel = () => { obSelected = providers[Number(ov.querySelector('input[name=obp]:checked')?.value ?? 0)] ?? null
+    if (keywrap) keywrap.hidden = !(obSelected && !obSelected.configured) }
+  ov.querySelectorAll('input[name=obp]').forEach(r => { r.onchange = sel })
+  sel()
+
+  ov.querySelector('#ob-skip').onclick = () => { vscode.postMessage({ kind: 'completeOnboarding' }); hideOnboarding() }
+  ov.querySelector('#ob-done').onclick = () => {
+    const key = (ov.querySelector('#ob-key')?.value || '').trim()
+    const go = () => { vscode.postMessage({ kind: 'completeOnboarding' }); hideOnboarding() }
+    if (obSelected && !obSelected.configured && obSelected.ref && key) {
+      vscode.postMessage({ kind: 'saveProviderKey', providerId: obSelected.id, key })
+    }
+    go()
+  }
+}
+
+function hideOnboarding() {
+  const ov = document.getElementById('ob-overlay')
+  if (ov) ov.remove()
+}
+
 // 优先携带上次的 sessionId，由扩展侧验证后复用，避免每次重建 webview 都新建会话
 const savedState = vscode.getState() || {}
 vscode.postMessage({ kind: 'ready', sessionId: savedState.sessionId })
+vscode.postMessage({ kind: 'getOnboarding' })

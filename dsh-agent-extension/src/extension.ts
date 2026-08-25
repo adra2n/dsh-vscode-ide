@@ -11,6 +11,7 @@ import { renderPage } from './webviewPage'
 import { EditorFiles, readTree } from './workspaceFiles'
 
 const DEFAULT_BASE = 'http://127.0.0.1:3080'
+const ONBOARDING_KEY = 'zao.onboardingDone'
 
 function cfg<T>(section: string): T | undefined {
   return vscode.workspace.getConfiguration('dshAgent').get<T>(section)
@@ -201,6 +202,36 @@ class DshViewProvider implements vscode.WebviewViewProvider {
           case 'setPermissionPreset':
             await this.permMgr!.setDefault(msg.preset)
             break
+          case 'getOnboarding': {
+            const needs = this.ext.globalState.get<boolean>(ONBOARDING_KEY) !== true
+            let providers: import('./models').OnboardingProvider[] = []
+            if (needs) {
+              try {
+                providers = await this.modelsMgr!.onboardingProviders()
+              } catch {
+                /* 网关未就绪时向导仅展示跳过 */
+              }
+            }
+            this.post(webview, { kind: 'onboarding', needs, providers })
+            break
+          }
+          case 'saveProviderKey':
+            await this.modelsMgr!.saveKey(msg.providerId, msg.key)
+            {
+              const providers = await this.modelsMgr!.onboardingProviders()
+              this.post(webview, { kind: 'onboarding', needs: true, providers })
+            }
+            break
+          case 'completeOnboarding': {
+            await this.ext.globalState.update(ONBOARDING_KEY, true)
+            try {
+              const models = await this.client!.listModels()
+              this.post(webview, { kind: 'modelsView', models })
+            } catch {
+              /* 模型目录刷新失败不阻塞向导关闭 */
+            }
+            break
+          }
           case 'getSettings': {
             let perm: { current?: string; options: string[] } = { options: [] }
             try {

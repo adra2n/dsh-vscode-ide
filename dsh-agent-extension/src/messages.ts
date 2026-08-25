@@ -1,7 +1,7 @@
 import type { GatewayStatus, ModelsView } from './dshClient'
-import type { CustomProviderInfo } from './models'
+import type { CustomProviderInfo, OnboardingProvider } from './models'
 
-export type { CustomProviderInfo }
+export type { CustomProviderInfo, OnboardingProvider }
 
 export interface TreeEntry {
   name: string
@@ -57,6 +57,9 @@ export type WebviewToExt =
   | { kind: 'renameSession'; sessionId: string; title: string }
   | { kind: 'setPermissionPreset'; preset: string }
   | { kind: 'listModelProviders' }
+  | { kind: 'getOnboarding' }
+  | { kind: 'saveProviderKey'; providerId: string; key: string }
+  | { kind: 'completeOnboarding' }
   | {
       kind: 'addModelProvider'
       id: string
@@ -111,5 +114,7 @@ export type ExtToWebview =
   | { kind: 'autoApproved'; toolName: string }
   | { kind: 'modelProviders'; providers: CustomProviderInfo[] }
   | { kind: 'modelProviderAdded' }
+  | { kind: 'onboarding'; needs: boolean; providers: OnboardingProvider[] }
+  | { kind: 'modelsView'; models: ModelsView }
 
 export type PostToWebview = (msg: ExtToWebview) => void

@@ -167,6 +167,21 @@ body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
 .prov .pkey-miss { color: var(--vscode-editorWarning, #cca700); }
 .prov .prm { cursor: pointer; opacity: .5; flex: none; }
 .prov .prm:hover { opacity: 1; color: var(--vscode-errorForeground); }
+#ob-panel { width: 380px; max-width: 92%; background: var(--vscode-editorWidget-background); border: 1px solid var(--vscode-panel-border); border-radius: 12px; padding: 18px 20px; box-shadow: 0 8px 30px rgba(0,0,0,.35); }
+.ob-title { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+.ob-title b { color: var(--vscode-textLink-foreground); }
+.ob-sub { font-size: 12px; opacity: .65; line-height: 1.5; margin-bottom: 12px; }
+.ob-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.ob-row { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border: 1px solid var(--vscode-panel-border); border-radius: 7px; cursor: pointer; font-size: 12px; }
+.ob-row:hover { border-color: var(--vscode-focusBorder); }
+.ob-row input[type="radio"] { margin: 0; }
+.ob-name { flex: 1; font-weight: 600; }
+.ob-badge { font-size: 10px; opacity: .55; border: 1px solid var(--vscode-panel-border); border-radius: 8px; padding: 1px 6px; }
+#ob-keywrap { margin: 4px 0 10px; }
+#ob-keywrap label { display: block; font-size: 11px; opacity: .65; margin-bottom: 4px; }
+#ob-key { width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 12px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); border-radius: 4px; outline: none; }
+#ob-key:focus { border-color: var(--vscode-focusBorder); }
+.ob-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
 </style>
 </head><body><div id="app"><div id="sidebar"><div id="sidebar-header"><div class="sb-title-row"><span class="title">会话</span><button id="new-session">＋ 新建</button></div><div class="sb-search"><span class="ic">🔍</span><input id="sess-filter" placeholder="搜索会话…"></div></div><div id="ws-list"></div><div id="sb-foot"><a id="show-all" hidden></a></div></div><div id="main"><div id="bar">
 <span id="gw-dot" class="gw wait" title="正在连接 DSH 网关"></span>

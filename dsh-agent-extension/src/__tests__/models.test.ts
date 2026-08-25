@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { buildProviderPatch, credentialRef } from '../models'
+import { buildProviderPatch, credentialRef, extractOnboardingProviders } from '../models'
 
 vi.mock('vscode', () => ({}))
 
@@ -44,5 +44,32 @@ describe('buildProviderPatch', () => {
     const p = buildProviderPatch({ ...base, contextWindow: -5, maxTokens: 0 })
     expect(p.defaultContextWindow).toBe(131072)
     expect(p.defaultMaxTokens).toBe(8192)
+  })
+})
+
+describe('extractOnboardingProviders', () => {
+  const nss = [
+    { ns: 'llm-deepseek', value: { apiKeyEnv: 'DEEPSEEK_API_KEY' } },
+    { ns: 'llm-pi-ai', value: { providers: {
+      xiaomi: { apiKeyEnv: 'XIAOMI_API_KEY' },
+      'my-vllm': { apiKeyEnv: 'ZAO_MY_VLLM_API_KEY', baseURL: 'http://127.0.0.1:8000/v1' },
+      nokey: { baseURL: 'http://x/v1' },
+    } } },
+    { ns: 'permission', value: {} },
+  ]
+
+  it('extracts builtin deepseek + pi-ai providers, skipping keyless entries', () => {
+    const ps = extractOnboardingProviders(nss)
+    expect(ps.map((p) => p.id)).toEqual(['deepseek-official', 'xiaomi', 'my-vllm'])
+    expect(ps[0]).toMatchObject({ ref: 'DEEPSEEK_API_KEY', kind: 'builtin', configured: false })
+    expect(ps[1]).toMatchObject({ kind: 'builtin' })
+  })
+
+  it('marks baseURL-bearing entries as custom', () => {
+    expect(extractOnboardingProviders(nss)[2]).toMatchObject({ id: 'my-vllm', kind: 'custom' })
+  })
+
+  it('returns empty for unrelated namespaces', () => {
+    expect(extractOnboardingProviders([{ ns: 'ui-theme', value: {} }])).toEqual([])
   })
 })
