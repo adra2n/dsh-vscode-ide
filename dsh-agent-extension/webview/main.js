@@ -966,9 +966,18 @@ window.addEventListener('message', (e) => {
     chunkRenderedTexts.clear()
     clearToolCards()
     const evs = m.events || []
-    sessionHasContent = evs.length > 0
+    // 配置类事件（permission/sandbox/approval 等）不产生可见内容
+    const VISIBLE = /message|chunk|turn\/|step\/|tool|question|title/
+    const hasVisible = evs.some((e) => VISIBLE.test(e?.type || ''))
+    sessionHasContent = hasVisible
     for (const ev of evs) renderHistoryEvent(ev)
-    if (!sessionHasContent) ensureHero()
+    if (!sessionHasContent) {
+      const empty = document.createElement('div')
+      empty.className = 'pending'
+      empty.style.margin = '20px auto'
+      empty.textContent = '（该会话没有对话记录）'
+      log.appendChild(empty)
+    }
   } else if (m.kind === 'frame') {
     m.frame._rpcId = m.rpcId
     dispatchFrame(m.frame)
