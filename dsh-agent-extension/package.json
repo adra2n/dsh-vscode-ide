@@ -10,31 +10,14 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onStartupFinished",
-    "onView:dshAgent.view"
-  ],
+  "activationEvents": ["onStartupFinished", "onCommand:dshAgent.openChat"],
   "main": "./out/extension.js",
   "contributes": {
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "dshAgent",
-          "title": "AI",
-          "icon": "media/ai.svg"
-        }
-      ]
-    },
-    "views": {
-      "dshAgent": [
-        {
-          "type": "webview",
-          "id": "dshAgent.view",
-          "name": "AI 对话"
-        }
-      ]
-    },
     "commands": [
+      {
+        "command": "dshAgent.openChat",
+        "title": "Zao: 打开 AI 对话"
+      },
       {
         "command": "dshAgent.openFile",
         "title": "Zao: 打开文件（右分屏）"

@@ -39,7 +39,7 @@ function cfg<T>(section: string): T | undefined {
   return vscode.workspace.getConfiguration('dshAgent').get<T>(section)
 }
 
-class DshViewProvider implements vscode.WebviewViewProvider {
+class ChatPanel {
   private client?: DshClient
   private gateway?: GatewayManager
   private approval?: ApprovalManager
@@ -47,11 +47,12 @@ class DshViewProvider implements vscode.WebviewViewProvider {
   private permMgr?: PermissionManager
   private tracker: ChangeTracker
   private files = new EditorFiles()
-  private viewVisible = false
+  private panel?: vscode.WebviewPanel
+  private wired = false
 
   constructor(private readonly ext: vscode.ExtensionContext) {
     this.tracker = new ChangeTracker({
-      post: () => undefined, // webview 就绪前不推送；resolve 时替换
+      post: () => undefined, // webview 就绪前不推送；openChat 时替换
       getRoot: () => vscode.workspace.workspaceFolders?.[0],
     })
   }
@@ -59,6 +60,10 @@ class DshViewProvider implements vscode.WebviewViewProvider {
   dispose() {
     this.client?.dispose()
     this.tracker.dispose()
+  }
+
+  get viewVisible(): boolean {
+    return this.panel?.visible ?? false
   }
 
   async openFileReadOnly(path: string) {
@@ -69,50 +74,82 @@ class DshViewProvider implements vscode.WebviewViewProvider {
     await this.files.toggleEdit()
   }
 
-  async resolveWebviewView(view: vscode.WebviewView): Promise<void> {
-    const webview = view.webview
-    this.viewVisible = view.visible
-    this.ext.subscriptions.push(
-      view.onDidChangeVisibility(() => {
-        this.viewVisible = view.visible
-      })
-    )
-    webview.options = { enableScripts: true, localResourceRoots: [this.ext.extensionUri] }
+  /** 创建（或聚焦）全窗口 AI 对话面板：对话占满编辑器区，diff 在旁边分栏打开。 */
+  openChat(): vscode.WebviewPanel {
+    if (this.panel) {
+      this.panel.reveal(undefined, true)
+      return this.panel
+    }
+    const panel = vscode.window.createWebviewPanel('zao.chat', 'Zao AI', vscode.ViewColumn.One, {
+      enableScripts: true,
+      retainContextWhenHidden: true,
+      localResourceRoots: [this.ext.extensionUri],
+    })
+    panel.iconPath = vscode.Uri.joinPath(this.ext.extensionUri, 'media', 'ai.svg')
+    this.panel = panel
+    this.wire(panel)
+    panel.onDidDispose(() => {
+      if (this.panel === panel) this.panel = undefined
+    })
+    return panel
+  }
+
+  serialize(): { sessionId?: string } {
+    return { sessionId: this.client?.currentSessionId }
+  }
+
+  /** 序列化恢复：应用重启后由 serializer 调用，接管重建的面板。 */
+  attachRestored(panel: vscode.WebviewPanel) {
+    if (this.panel) {
+      panel.dispose()
+      return
+    }
+    this.panel = panel
+    this.wire(panel)
+    panel.onDidDispose(() => {
+      if (this.panel === panel) this.panel = undefined
+    })
+  }
+
+  private wire(panel: vscode.WebviewPanel) {
+    const webview = panel.webview
     webview.html = renderPage(webview, this.ext.extensionUri)
     this.tracker.setPost((msg) => this.post(webview, msg))
 
-    this.gateway = new GatewayManager({
-      extensionPath: this.ext.extensionPath,
-      getConfig: cfg,
-      post: (msg) => this.post(webview, msg),
-    })
-    const base = cfg<string>('gatewayBase') || DEFAULT_BASE
-    this.approval = new ApprovalManager({
-      getClient: () => this.client!,
-      post: (msg) => this.post(webview, msg),
-      persistAutoAllow: async (tools) =>
-        void (await vscode.workspace
-          .getConfiguration('dshAgent')
-          .update('autoAllowTools', tools, vscode.ConfigurationTarget.Global)),
-      isViewVisible: () => this.viewVisible,
-    })
-    this.approval.setAutoAllow(cfg<string[]>('autoAllowTools') || [])
-    this.modelsMgr = new ModelsManager(() => this.client!)
-    this.permMgr = new PermissionManager(() => this.client!)
-    this.client = new DshClient(base)
-    this.bindClient(webview)
+    if (!this.gateway) {
+      this.gateway = new GatewayManager({
+        extensionPath: this.ext.extensionPath,
+        getConfig: cfg,
+        post: (msg) => this.post(webview, msg),
+      })
+      const base = cfg<string>('gatewayBase') || DEFAULT_BASE
+      this.approval = new ApprovalManager({
+        getClient: () => this.client!,
+        post: (msg) => this.post(webview, msg),
+        persistAutoAllow: async (tools) =>
+          void (await vscode.workspace
+            .getConfiguration('dshAgent')
+            .update('autoAllowTools', tools, vscode.ConfigurationTarget.Global)),
+        isViewVisible: () => this.viewVisible,
+      })
+      this.approval.setAutoAllow(cfg<string[]>('autoAllowTools') || [])
+      this.modelsMgr = new ModelsManager(() => this.client!)
+      this.permMgr = new PermissionManager(() => this.client!)
+      this.client = new DshClient(base)
+      this.bindClient(webview)
 
-    this.ext.subscriptions.push(
-      vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration('dshAgent.gatewayBase')) {
-          const newBase = cfg<string>('gatewayBase') || DEFAULT_BASE
-          void this.reconnectClient(webview, newBase)
-        }
-        if (e.affectsConfiguration('dshAgent.pureAILayout')) {
-          void applyPureLayout(cfg<boolean>('pureAILayout') ?? true)
-        }
-      }),
-    )
+      this.ext.subscriptions.push(
+        vscode.workspace.onDidChangeConfiguration((e) => {
+          if (e.affectsConfiguration('dshAgent.gatewayBase')) {
+            const newBase = cfg<string>('gatewayBase') || DEFAULT_BASE
+            void this.reconnectClient(webview, newBase)
+          }
+          if (e.affectsConfiguration('dshAgent.pureAILayout')) {
+            void applyPureLayout(cfg<boolean>('pureAILayout') ?? true)
+          }
+        }),
+      )
+    }
 
     webview.onDidReceiveMessage(async (raw) => {
       const msg = raw as WebviewToExt
@@ -423,16 +460,22 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.workspace.registerTextDocumentContentProvider(GitHeadContentProvider.scheme, new GitHeadContentProvider()),
   )
-  const provider = new DshViewProvider(context)
+  const chat = new ChatPanel(context)
+  context.subscriptions.push(chat)
+
+  // 跨重启恢复对话面板（sessionId 由 webview 自身状态携带）
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider('dshAgent.view', provider, {
-      webviewOptions: { retainContextWhenHidden: true },
-    })
+    vscode.window.registerWebviewPanelSerializer('zao.chat', {
+      async deserializeWebviewPanel(panel: vscode.WebviewPanel) {
+        chat.attachRestored(panel)
+      },
+    }),
   )
   context.subscriptions.push(
-    vscode.commands.registerCommand('dshAgent.openFile', (path: string) => provider.openFileReadOnly(path))
+    vscode.commands.registerCommand('dshAgent.openFile', (path: string) => chat.openFileReadOnly(path)),
   )
-  context.subscriptions.push(vscode.commands.registerCommand('dshAgent.toggleEdit', () => provider.toggleEdit()))
+  context.subscriptions.push(vscode.commands.registerCommand('dshAgent.toggleEdit', () => chat.toggleEdit()))
+  context.subscriptions.push(vscode.commands.registerCommand('dshAgent.openChat', () => chat.openChat()))
   context.subscriptions.push(
     vscode.commands.registerCommand('dshAgent.togglePureLayout', async () => {
       const cfg = vscode.workspace.getConfiguration('dshAgent')
@@ -442,9 +485,8 @@ export async function activate(context: vscode.ExtensionContext) {
       void vscode.window.showInformationMessage(next ? 'Zao：已进入极简 AI 布局' : 'Zao：已恢复完整布局')
     }),
   )
-  context.subscriptions.push({ dispose: () => provider.dispose() })
 
-  // AI-first 布局：极简模式（默认）只留 AI 面板；完整模式保留 Explorer + AI 右侧栏。
+  // AI-first 布局：对话面板占满整个窗口（编辑器区），diff/文件在旁边分栏按需打开。
   // 仅在用户未自行配置 startupEditor 时写入，避免覆盖用户偏好。
   const pure = cfg<boolean>('pureAILayout') ?? true
   const wb = vscode.workspace.getConfiguration('workbench')
@@ -453,24 +495,9 @@ export async function activate(context: vscode.ExtensionContext) {
   }
   if (pure) {
     await applyPureLayout(true)
-    vscode.commands.executeCommand('dshAgent.view.focus').then(() => {
-      setTimeout(() => {
-        // 主侧栏优先（占满左侧）；命令不可用时回退副侧栏
-        vscode.commands.executeCommand('workbench.action.moveViewToPrimarySidebar').then(
-          () => undefined,
-          () => vscode.commands.executeCommand('workbench.action.moveViewToSecondarySidebar').then(undefined, () => undefined),
-        )
-      }, 300)
-    }, undefined)
-  } else {
-    vscode.commands.executeCommand('workbench.view.explorer').then(() => {
-      vscode.commands.executeCommand('dshAgent.view.focus').then(() => {
-        setTimeout(() => {
-          vscode.commands.executeCommand('workbench.action.moveViewToSecondarySidebar').then(undefined, () => undefined)
-        }, 300)
-      }, undefined)
-    }, undefined)
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors').then(undefined, () => undefined)
   }
+  chat.openChat()
 }
 
 export function deactivate() {}
